@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.5
+
+- Require freshness from the dedicated Shelly EVSE power measurement rather than an unchanged contactor.
+- Continue to block whenever the readable contactor is ON, even if its report timestamp is old.
+- Allow a readable OFF contactor with fresh Shelly power at or below the configured idle limit.
+
 ## 0.3.4
 
 - Remove the retired sandbox release, sandbox recovery and sandbox pause controls from the Web UI.

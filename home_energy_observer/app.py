@@ -18,7 +18,7 @@ from deployment import (Blocked, Installer, HomeAssistant, DEFAULT_CONTACTOR,
                         DEFAULT_POWER, DEFAULT_IDLE_POWER_WATTS)
 
 MAX_BYTES = 1024 * 1024
-APP_VERSION = "0.3.4"
+APP_VERSION = "0.3.5"
 
 
 class NoRedirect(HTTPRedirectHandler):
