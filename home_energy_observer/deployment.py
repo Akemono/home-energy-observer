@@ -117,7 +117,12 @@ class HomeAssistant:
         self.contactor = contactor
         self.power = power
         self.idle_power_watts = float(idle_power_watts)
+        self.last_charging_check = "Not checked since app start"
         self.opener = build_opener(NoRedirect())
+
+    def _charging_result(self, status, detail):
+        self.last_charging_check = status + ": " + detail
+        return status
 
     def _request(self, suffix, post=False):
         if not self.token:
@@ -140,19 +145,23 @@ class HomeAssistant:
             now = datetime.now(timezone.utc)
             for name, state in zip((self.contactor, self.power), states):
                 if state.get("entity_id") != name:
-                    return "unknown"
+                    return self._charging_result("unknown", "entity response mismatch")
                 stamp = datetime.fromisoformat(state["last_reported"].replace("Z", "+00:00"))
                 age = (now - stamp).total_seconds()
                 if not 0 <= age <= 120:
-                    return "unknown"
+                    return self._charging_result("unknown", name + " is stale or future-dated")
             watts = float(states[1]["state"])
             if not math.isfinite(watts):
-                return "unknown"
+                return self._charging_result("unknown", "dedicated EVSE power is not finite")
             if states[0]["state"] not in ("on", "off"):
-                return "unknown"
-            return "charging" if states[0]["state"] == "on" or abs(watts) > self.idle_power_watts else "idle"
+                return self._charging_result("unknown", "contactor state is not on/off")
+            if states[0]["state"] == "on":
+                return self._charging_result("charging", "contactor is on")
+            if abs(watts) > self.idle_power_watts:
+                return self._charging_result("charging", "dedicated EVSE power exceeds %.1f W" % self.idle_power_watts)
+            return self._charging_result("idle", "contactor off and dedicated EVSE power within %.1f W" % self.idle_power_watts)
         except Exception:
-            return "unknown"
+            return self._charging_result("unknown", "sensor/API read or validation failed")
 
     def restart(self):
         return self._request("services/homeassistant/restart", post=True)
@@ -464,10 +473,14 @@ class Installer:
         grant = "None"
         if self.grant and time.monotonic() < self.grant[2]:
             grant = esc(self.grant[1] + " / " + self.grant[0][:12]) + " (one use, expires within 10 minutes)"
+        gate_detail = getattr(self.ha, "last_charging_check", "Not available")
+        if not isinstance(gate_detail, str):
+            gate_detail = "Not available"
         return ('<section><h2>Integration deployment — experimental</h2><p>' + esc(self.status) +
                 '</p><p>Confirmed: ' + label(active) + '<br>Pending verification: ' + label(pending) +
                 '<br>Candidate: ' + label(self.candidate) + '<br>Recovery versions: ' + str(len(self.state["history"])) +
                 '/3<br>Automatic deployments: ' + ("Paused" if self.state["paused"] else "Enabled") +
-                '<br>Override: ' + grant + '</p><p>Overrides bypass only the charging gate, never validation. Restarting HA interrupts ALL automations, including load protection. Do not rely on HA protection during restart.</p><div class="actions">' +
+                '<br>Override: ' + grant + '<br>Charging gate last check: ' + esc(gate_detail) +
+                '</p><p>Overrides bypass only the charging gate, never validation. Restarting HA interrupts ALL automations, including load protection. Do not rely on HA protection during restart.</p><div class="actions">' +
                 (buttons if self.enabled else "Enable deployments in app Configuration to use these controls.") +
                 '</div><p>Only home_energy_tesla is managed. Existing YAML charging automations remain active. Confirmation is your manual acceptance, not an automatic health check.</p></section>')

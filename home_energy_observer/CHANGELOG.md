@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.4
+
+- Remove the retired sandbox release, sandbox recovery and sandbox pause controls from the Web UI.
+- Stop polling or updating the legacy sandbox at runtime; its stored data is left untouched.
+- Remove the ten-second full-page auto refresh that caused visible flicker.
+- Keep one deployment-focused Check now control and show the last charging-gate diagnostic.
+
 ## 0.3.3
 
 - Remove the unused legacy charging current option from configuration, schema and translations.

@@ -18,7 +18,7 @@ from deployment import (Blocked, Installer, HomeAssistant, DEFAULT_CONTACTOR,
                         DEFAULT_POWER, DEFAULT_IDLE_POWER_WATTS)
 
 MAX_BYTES = 1024 * 1024
-APP_VERSION = "0.3.3"
+APP_VERSION = "0.3.4"
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -193,17 +193,26 @@ class Observer:
                     self.state["status"] = "Candidate rejected, connection or storage failed. Active release unchanged."
             with self.lock:
                 self.state["last_checked"] = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
-            if self.installer:
-                try:
-                    self.installer.poll(client, quote(branch, safe=""))
-                except HTTPError as error:
-                    self.installer.candidate = None
-                    self.installer.grant = None
-                    self.installer.status = "Deployment unavailable (HTTP %d); inspect pending recovery if any" % error.code
-                except Exception as error:
-                    self.installer.candidate = None
-                    self.installer.grant = None
-                    self.installer.status = str(error) if isinstance(error, Blocked) else "Deployment validation, connection or storage failed. Inspect pending recovery."
+            self._poll_installer(client, branch)
+
+    def _poll_installer(self, client, branch):
+        if not self.installer:
+            return
+        try:
+            self.installer.poll(client, quote(branch, safe=""))
+        except HTTPError as error:
+            self.installer.candidate = None
+            self.installer.grant = None
+            self.installer.status = "Deployment unavailable (HTTP %d); inspect pending recovery if any" % error.code
+        except Exception as error:
+            self.installer.candidate = None
+            self.installer.grant = None
+            self.installer.status = str(error) if isinstance(error, Blocked) else "Deployment validation, connection or storage failed. Inspect pending recovery."
+
+    def poll_deployment(self, client, branch):
+        """Runtime path: the retired dry-run sandbox is no longer polled."""
+        with self.operation:
+            self._poll_installer(client, branch)
 
     def action(self, name, expected_commit=""):
         if name == "check":
@@ -238,26 +247,15 @@ class Observer:
                 self.state["status"] = status
 
     def render(self):
-        with self.lock:
-            state = copy.deepcopy(self.state)
-        summary = self.store.summary() if self.store else {"active": None, "history": [], "paused": False}
-        esc = html.escape
-        def form(action, label, disabled=False):
-            active = summary["active"]["commit"] if summary["active"] else ""
-            return ('<form method="post" action="' + action + '"><input type="hidden" name="csrf" value="' + self.csrf +
-                    '"><input type="hidden" name="commit" value="' + active + '"><button ' + ('disabled' if disabled else '') + '>' + label + '</button></form>')
-        active = summary["active"]
-        cards = '<p>No test release installed yet.</p>' if not active else '<h2>Installed test release ' + esc(active["version"]) + '</h2><p>Commit <code>' + esc(active["commit"][:12]) + '</code></p>'
-        history = "".join('<li>' + esc(item["version"]) + ' — <code>' + item["commit"][:12] + '</code></li>' for item in summary["history"])
-        page = '''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="refresh" content="10"><title>Home Energy</title>
+        check = ('<form method="post" action="check"><input type="hidden" name="csrf" value="' + self.csrf +
+                 '"><button>Check now</button></form>')
+        page = '''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Home Energy</title>
 <style>body{font:16px system-ui,sans-serif;background:#101923;color:#e4edf6;margin:0;padding:32px}main{max-width:900px;margin:auto}section{background:#1b2938;padding:24px;border-radius:12px;margin:20px 0}h1{margin-bottom:8px}p{line-height:1.6}small{color:#b4c5d5}.actions{display:flex;flex-wrap:wrap;gap:12px}button{background:#80d8ff;color:#10202c;border:0;border-radius:6px;padding:12px 18px;font:inherit;cursor:pointer}button:disabled{opacity:.4;cursor:default}code{overflow-wrap:anywhere}li{margin:12px 0}</style></head><body><main>
-<h1>Home Energy</h1><small>App ''' + APP_VERSION + ''' · Sandbox installation test</small>
-<p>Sandbox test releases are stored in this app's own storage. Home Assistant configuration and charging are not controlled by this app.</p>
-<section><h2>''' + esc(state["status"]) + '</h2><p>Last check: ' + esc(state["last_checked"] or "Not yet") + '</p><div class="actions">' + form("check", "Check now") + form("resume" if summary["paused"] else "pause", "Resume automatic updates" if summary["paused"] else "Pause automatic updates") + '</div></section><section>' + cards + '<p>Automatic updates: ' + ("Paused" if summary["paused"] else "Enabled") + '</p></section><section><h2>Recovery versions (' + str(len(summary["history"])) + '/3)</h2><ul>' + history + '</ul>' + form("rollback", "Restore previous test version", not summary["history"]) + '<p>Restoring pauses automatic updates, including after an app restart. Resume explicitly when ready.</p></section></main></body></html>'
+<h1>Home Energy</h1><small>App ''' + APP_VERSION + ''' · Managed integration deployment</small>
+<p>Manages only the verified Home Energy integration bundle. No charging commands are sent.</p>
+<section><h2>Deployment check</h2><p>Fetch and verify the current candidate from the configured release branch.</p><div class="actions">''' + check + '''</div></section></main></body></html>'''
         if self.installer:
             page = page.replace("</main>", self.installer.render(self.csrf) + "</main>")
-            page = page.replace("Home Assistant configuration and charging are not controlled by this app.",
-                                "The optional deployment below can write its managed HA integration. No charging commands are sent.")
         return page.encode("utf-8")
 
 
@@ -294,7 +292,7 @@ def make_handler(observer, allowed_peer="172.30.32.2", deployment_admin=""):
             deploy_actions = ("/deploy-install", "/deploy-override", "/deploy-restart", "/restart-override",
                               "/deploy-confirm", "/deploy-rollback", "/rollback-override", "/deploy-recover",
                               "/deploy-pause", "/deploy-resume")
-            if self.path not in ("/check", "/pause", "/resume", "/rollback") + deploy_actions:
+            if self.path not in ("/check",) + deploy_actions:
                 self.send_error(404)
                 return
             if self.path in deploy_actions and (not deployment_admin or not secrets.compare_digest(
@@ -329,10 +327,6 @@ def main():
     options = json.loads(Path("/data/options.json").read_text())
     client = GitHub(options["repository"], options.get("github_token", ""))
     interval = max(60, min(3600, int(options.get("interval_seconds", 60))))
-    try:
-        store = ReleaseStore("/data/sandbox")
-    except Exception:
-        raise SystemExit("Sandbox state could not be read or verified. Preserved on disk; automatic installation stopped.")
     admin = options.get("deployment_admin_user_id", "")
     if admin and not re.fullmatch("[0-9a-f]{32}", admin):
         raise SystemExit("deployment_admin_user_id must be the 32-character HA administrator user ID")
@@ -345,11 +339,11 @@ def main():
                               enabled=bool(options.get("enable_deployment", False) and admin))
     except Exception:
         raise SystemExit("Deployment state invalid. Files preserved; repair stored state before restarting.")
-    observer = Observer(store, installer)
+    observer = Observer(installer=installer)
     def worker():
         while True:
             observer.wakeup.clear()
-            observer.poll(client, options.get("branch", "production"))
+            observer.poll_deployment(client, options.get("branch", "production"))
             observer.wakeup.wait(interval)
     threading.Thread(target=worker, daemon=True).start()
     ThreadingHTTPServer(("0.0.0.0", 8099), make_handler(observer, deployment_admin=admin)).serve_forever()
