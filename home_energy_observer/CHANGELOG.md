@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.6
+
+- Stop treating Home Assistant state timestamps as device heartbeats for push integrations.
+- Fail closed on unavailable, unknown, malformed, non-finite or restored entity states.
+- Continue to block on contactor ON or dedicated EVSE power above the configured idle limit.
+
 ## 0.3.5
 
 - Require freshness from the dedicated Shelly EVSE power measurement rather than an unchanged contactor.

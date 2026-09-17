@@ -1,4 +1,4 @@
-# Home Energy Observer 0.3.5
+# Home Energy Observer 0.3.6
 
 ## Recommended installation from the app repository
 
@@ -46,7 +46,7 @@ in chat. The app does not send configuration files or HA tokens to GitHub.
 ## Start safely
 
 1. Keep github_token, repository, branch=production and interval_seconds unchanged.
-2. Leave enable_deployment OFF initially. Open Web UI and confirm App 0.3.5.
+2. Leave enable_deployment OFF initially. Open Web UI and confirm App 0.3.6.
    Legacy sandbox state, if present, remains inert in /data/sandbox and is not displayed or polled.
 3. While logged into HA as your administrator, copy your Ingress user ID displayed
    at the bottom of this app. In the app Configuration set deployment_admin_user_id
@@ -92,14 +92,16 @@ is blocked rather than overwriting user changes. Ask for a migration/reconciliat
 
 The gate uses the local Wall Connector contactor and dedicated Shelly total active
 power, not cloud charging state, connected state or the Wall Connector's phantom
-vehicle-current reading. Connected but idle is allowed. The dedicated Shelly power
-reading must have a timezone-aware last_reported within 120 seconds. A readable
-contactor ON always counts as charging, even when its unchanged report is old.
-A readable OFF contactor is accepted when the Shelly reading is fresh and its
-absolute power is at or below charging_idle_power_watts. The default 50 W limit is
-well below a 1 A charge and may never be configured above 100 W. Unknown or invalid
-contactor states, unavailable/invalid/stale Shelly power, missing token and API or
-network failures block installation and restart.
+vehicle-current reading. Connected but idle is allowed. The Wall Connector and
+Shelly integrations are push-based and may leave last_reported unchanged while a
+healthy value remains constant, so HA timestamps are not treated as heartbeats.
+A readable contactor ON always counts as charging. A readable OFF contactor is
+accepted when the Shelly absolute power is at or below charging_idle_power_watts.
+The default 50 W limit is well below a 1 A charge and may never be configured above
+100 W. Unknown, unavailable, malformed, non-finite or restored states, missing token
+and API/network failures block installation and restart. HA integration availability
+is relied upon to mark a disconnected device unavailable; this is not a hardware
+safety interlock.
 
 Check now refreshes the read-only charging-gate diagnostic even while deployments
 are paused or an installation is awaiting confirmation.

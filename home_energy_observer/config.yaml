@@ -1,5 +1,5 @@
 name: Home Energy Observer
-version: "0.3.5"
+version: "0.3.6"
 slug: home_energy_observer
 description: Git observer with opt-in integration deployment and recovery.
 arch:

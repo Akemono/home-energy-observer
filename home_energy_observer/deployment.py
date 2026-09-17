@@ -11,7 +11,6 @@ import re
 import shutil
 import tempfile
 import time
-from datetime import datetime, timezone
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
 DOMAIN = "home_energy_tesla"
@@ -143,14 +142,13 @@ class HomeAssistant:
             for name, state in zip((self.contactor, self.power), states):
                 if state.get("entity_id") != name:
                     return self._charging_result("unknown", "entity response mismatch")
-            # Some EVSE integrations report an unchanged contactor only when it
-            # changes. The dedicated Shelly is the independent live measurement,
-            # so only its report must be fresh. A readable contactor ON still
-            # blocks even when that state has not been reported recently.
-            stamp = datetime.fromisoformat(states[1]["last_reported"].replace("Z", "+00:00"))
-            age = (datetime.now(timezone.utc) - stamp).total_seconds()
-            if not 0 <= age <= 120:
-                return self._charging_result("unknown", self.power + " is stale or future-dated")
+            # These push integrations may not report unchanged healthy values,
+            # so HA timestamps are not a heartbeat. Depend on entity availability
+            # and reject restored startup snapshots instead.
+            for state in states:
+                attributes = state.get("attributes", {})
+                if not isinstance(attributes, dict) or attributes.get("restored") is True:
+                    return self._charging_result("unknown", "entity state is restored or malformed")
             watts = float(states[1]["state"])
             if not math.isfinite(watts):
                 return self._charging_result("unknown", "dedicated EVSE power is not finite")
@@ -160,7 +158,7 @@ class HomeAssistant:
                 return self._charging_result("charging", "contactor is on")
             if abs(watts) > self.idle_power_watts:
                 return self._charging_result("charging", "dedicated EVSE power exceeds %.1f W" % self.idle_power_watts)
-            return self._charging_result("idle", "contactor off and fresh dedicated EVSE power within %.1f W" % self.idle_power_watts)
+            return self._charging_result("idle", "contactor off and dedicated EVSE power within %.1f W" % self.idle_power_watts)
         except Exception:
             return self._charging_result("unknown", "sensor/API read or validation failed")
 
