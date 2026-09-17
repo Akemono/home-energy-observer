@@ -20,7 +20,6 @@ ALLOWED = frozenset(("__init__.py", "config_flow.py", "const.py", "engine.py",
                      "power.py", "sensor.py", "switch.py", "manifest.json",
                      "strings.json", "translations/en.json", "README.md"))
 DEFAULT_CONTACTOR = "binary_sensor.evse_contactor_closed"
-DEFAULT_CURRENT = "sensor.evse_vehicle_current"
 DEFAULT_POWER = "sensor.evse_total_active_power"
 DEFAULT_IDLE_POWER_WATTS = 50.0
 

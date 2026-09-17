@@ -1,4 +1,4 @@
-# Home Energy Observer 0.3.2
+# Home Energy Observer 0.3.3
 
 ## Recommended installation from the app repository
 
@@ -12,9 +12,8 @@ branch as its release branch and github_token as a repository-scoped,
 fine-grained Contents: read-only token. Also configure charging_contactor_entity
 with the Wall Connector contactor and charging_power_entity with the Shelly
 Total active power sensor that measures only the Wall Connector. The default
-charging_idle_power_watts is 50 W and is constrained to 1–100 W. The legacy
-charging_current_entity option is retained for upgrade compatibility but is not
-used by the gate. Never publish or send this configuration or token.
+charging_idle_power_watts is 50 W and is constrained to 1–100 W. Never publish
+or send this configuration or token.
 
 ## One-time upgrade and permissions
 
@@ -47,7 +46,7 @@ in chat. The app does not send configuration files or HA tokens to GitHub.
 ## Start safely
 
 1. Keep github_token, repository, branch=production and interval_seconds unchanged.
-2. Leave enable_deployment OFF initially. Open Web UI and confirm App 0.3.2.
+2. Leave enable_deployment OFF initially. Open Web UI and confirm App 0.3.3.
    The original sandbox installation/history stays in /data/sandbox.
 3. While logged into HA as your administrator, copy your Ingress user ID displayed
    at the bottom of this app. In the app Configuration set deployment_admin_user_id

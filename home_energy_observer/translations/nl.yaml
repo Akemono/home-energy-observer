@@ -20,9 +20,6 @@ configuration:
   charging_contactor_entity:
     name: Entiteit laadcontactor
     description: Lokale binary_sensor waarmee actief laden wordt vastgesteld.
-  charging_current_entity:
-    name: Oude entiteit laadstroom
-    description: Behouden voor updatecompatibiliteit; wordt niet meer door de deploymentgate gebruikt.
   charging_power_entity:
     name: Entiteit totaal actief vermogen EVSE
     description: Shelly-sensor in watt die uitsluitend het totale actieve vermogen van de Wall Connector meet.

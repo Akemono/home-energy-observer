@@ -20,9 +20,6 @@ configuration:
   charging_contactor_entity:
     name: Charging contactor entity
     description: Local binary_sensor used to determine whether charging is active.
-  charging_current_entity:
-    name: Legacy charging current entity
-    description: Retained for upgrade compatibility; no longer used by the deployment gate.
   charging_power_entity:
     name: Dedicated EVSE total active power entity
     description: Shelly sensor measuring only the Wall Connector total active power in watts.
