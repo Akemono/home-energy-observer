@@ -1,0 +1,25 @@
+configuration:
+  repository:
+    name: Private GitHub repository
+    description: Repository in owner/name format containing deployment releases.
+  branch:
+    name: Release branch
+    description: Branch used as the deployment trust boundary.
+  github_token:
+    name: GitHub token
+    description: Fine-grained token restricted to Contents read-only for the private repository.
+  interval_seconds:
+    name: Check interval
+    description: Seconds between Git checks (60–3600).
+  enable_deployment:
+    name: Enable integration deployment
+    description: Allow this app to manage its fixed Home Assistant integration folder.
+  deployment_admin_user_id:
+    name: Deployment administrator user ID
+    description: Exact 32-character Home Assistant user ID allowed to use deployment controls.
+  charging_contactor_entity:
+    name: Charging contactor entity
+    description: Local binary_sensor used to determine whether charging is active.
+  charging_current_entity:
+    name: Charging current entity
+    description: Local sensor used to determine whether charging current is present.

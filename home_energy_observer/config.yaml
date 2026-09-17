@@ -1,0 +1,39 @@
+name: Home Energy Observer
+version: "0.3.1"
+slug: home_energy_observer
+description: Git observer with opt-in integration deployment and recovery.
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+ingress: true
+ingress_port: 8099
+panel_title: Home Energy
+panel_icon: mdi:transmission-tower
+panel_admin: true
+url: https://github.com/Akemono/home-energy-observer
+homeassistant_api: true
+map:
+  - type: homeassistant_config
+    read_only: false
+    path: /homeassistant
+options:
+  repository: owner/repository
+  branch: production
+  github_token: ""
+  interval_seconds: 60
+  enable_deployment: false
+  deployment_admin_user_id: ""
+  charging_contactor_entity: binary_sensor.evse_contactor_closed
+  charging_current_entity: sensor.evse_vehicle_current
+schema:
+  repository: str
+  branch: str
+  github_token: password
+  interval_seconds: int(60,3600)
+  enable_deployment: bool
+  deployment_admin_user_id: str
+  charging_contactor_entity: str
+  charging_current_entity: str

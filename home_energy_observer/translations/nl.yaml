@@ -1,0 +1,25 @@
+configuration:
+  repository:
+    name: Private GitHub-repository
+    description: Repository in eigenaar/naam-formaat met deploymentreleases.
+  branch:
+    name: Releasebranch
+    description: Branch die als vertrouwensgrens voor deployments wordt gebruikt.
+  github_token:
+    name: GitHub-token
+    description: Fine-grained token met alleen Contents read voor de private repository.
+  interval_seconds:
+    name: Controle-interval
+    description: Seconden tussen Git-controles (60–3600).
+  enable_deployment:
+    name: Integratiedeployment inschakelen
+    description: Sta deze app toe uitsluitend de vaste Home Assistant-integratiemap te beheren.
+  deployment_admin_user_id:
+    name: Gebruikers-ID deploymentbeheerder
+    description: Exacte 32-teken Home Assistant-gebruikers-ID voor deploymentknoppen.
+  charging_contactor_entity:
+    name: Entiteit laadcontactor
+    description: Lokale binary_sensor waarmee actief laden wordt vastgesteld.
+  charging_current_entity:
+    name: Entiteit laadstroom
+    description: Lokale sensor waarmee aanwezige laadstroom wordt vastgesteld.
