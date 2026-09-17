@@ -99,6 +99,9 @@ is well below a 1 A charge and may never be configured above 100 W. Unknown,
 unavailable, invalid or stale values, missing token and API/network failures block
 installation and restart.
 
+Check now refreshes the read-only charging-gate diagnostic even while deployments
+are paused or an installation is awaiting confirmation.
+
 Last reported freshness is not proof of sensor correctness. There is no atomic
 lock between reading charging status and changing files/restarting HA. The app
 does NOT stop the charger or hold its state. Avoid starting charging during an

@@ -377,6 +377,9 @@ class Installer:
         if self.grant and self.grant[1] == "install" and self.grant[0] != commit:
             self.grant = None
         self.candidate = record
+        # Refresh the diagnostic even while deployments are paused or pending.
+        # This is read-only and lets Check now explain a fail-closed gate.
+        charging = self.ha.charging()
         if self.state["pending"]:
             self.status = "Awaiting restart and confirmation of installed files"
             return
@@ -387,7 +390,7 @@ class Installer:
             self.status = "Confirmed deployment is current"
             return
         # A normal charging block must not create a journal/staging transaction.
-        if self.ha.charging() != "idle" and not self.grant:
+        if charging != "idle" and not self.grant:
             self.status = "Waiting: charging or charging state unknown"
             return
         self.write(record)
