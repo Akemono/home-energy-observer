@@ -21,6 +21,8 @@ ALLOWED = frozenset(("__init__.py", "config_flow.py", "const.py", "engine.py",
                      "strings.json", "translations/en.json", "README.md"))
 DEFAULT_CONTACTOR = "binary_sensor.evse_contactor_closed"
 DEFAULT_CURRENT = "sensor.evse_vehicle_current"
+DEFAULT_POWER = "sensor.evse_total_active_power"
+DEFAULT_IDLE_POWER_WATTS = 50.0
 
 
 class Blocked(ValueError):
@@ -102,14 +104,20 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 class HomeAssistant:
-    def __init__(self, token, contactor=DEFAULT_CONTACTOR, current=DEFAULT_CURRENT):
+    def __init__(self, token, contactor=DEFAULT_CONTACTOR, power=DEFAULT_POWER,
+                 idle_power_watts=DEFAULT_IDLE_POWER_WATTS):
         if not re.fullmatch(r"binary_sensor\.[a-z0-9_]+", contactor):
             raise Blocked("Invalid charging contactor entity ID")
-        if not re.fullmatch(r"sensor\.[a-z0-9_]+", current):
-            raise Blocked("Invalid charging current entity ID")
+        if not re.fullmatch(r"sensor\.[a-z0-9_]+", power):
+            raise Blocked("Invalid charging power entity ID")
+        if (isinstance(idle_power_watts, bool) or not isinstance(idle_power_watts, (int, float))
+                or not math.isfinite(float(idle_power_watts))
+                or not 1 <= float(idle_power_watts) <= 100):
+            raise Blocked("Idle power limit must be between 1 and 100 W")
         self.token = token
         self.contactor = contactor
-        self.current = current
+        self.power = power
+        self.idle_power_watts = float(idle_power_watts)
         self.opener = build_opener(NoRedirect())
 
     def _request(self, suffix, post=False):
@@ -129,21 +137,21 @@ class HomeAssistant:
         try:
             # A state that is unchanged may have an old last_updated.
             # Use the integration's periodic last_reported time, fail closed if absent.
-            states = [self._request("states/" + name) for name in (self.contactor, self.current)]
+            states = [self._request("states/" + name) for name in (self.contactor, self.power)]
             now = datetime.now(timezone.utc)
-            for name, state in zip((self.contactor, self.current), states):
+            for name, state in zip((self.contactor, self.power), states):
                 if state.get("entity_id") != name:
                     return "unknown"
                 stamp = datetime.fromisoformat(state["last_reported"].replace("Z", "+00:00"))
                 age = (now - stamp).total_seconds()
                 if not 0 <= age <= 120:
                     return "unknown"
-            amps = float(states[1]["state"])
-            if not math.isfinite(amps) or amps < 0:
+            watts = float(states[1]["state"])
+            if not math.isfinite(watts):
                 return "unknown"
             if states[0]["state"] not in ("on", "off"):
                 return "unknown"
-            return "charging" if states[0]["state"] == "on" or amps > 0.1 else "idle"
+            return "charging" if states[0]["state"] == "on" or abs(watts) > self.idle_power_watts else "idle"
         except Exception:
             return "unknown"
 
@@ -442,10 +450,10 @@ class Installer:
         buttons = button("deploy-pause", "Pause deployments") + button("deploy-resume", "Resume deployments")
         if self.candidate and not pending:
             buttons += button("deploy-install", "Install verified candidate", self.candidate)
-            buttons += button("deploy-override", "Install this update while charging — arm one-time override", self.candidate)
+            buttons += button("deploy-override", "Force install despite charging — arm one-time override", self.candidate)
         if pending:
             buttons += button("deploy-restart", "Restart Home Assistant", pending)
-            buttons += button("restart-override", "Restart while charging — arm one-time override", pending)
+            buttons += button("restart-override", "Force restart despite charging — arm one-time override", pending)
             buttons += button("deploy-confirm", "I verified the integration works — confirm installation", pending)
         if active:
             buttons += button("deploy-rollback", "Restore previous integration files", pending or active)

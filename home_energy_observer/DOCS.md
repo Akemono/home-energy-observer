@@ -1,4 +1,4 @@
-# Home Energy Observer 0.3.1
+# Home Energy Observer 0.3.2
 
 ## Recommended installation from the app repository
 
@@ -10,8 +10,11 @@ write access to /addons and cannot replace its own container.
 Configure repository as the owner/name of the private deployment repository,
 branch as its release branch and github_token as a repository-scoped,
 fine-grained Contents: read-only token. Also configure charging_contactor_entity
-and charging_current_entity with the local EVSE entity IDs used by the charging
-gate. Never publish or send this configuration or token.
+with the Wall Connector contactor and charging_power_entity with the Shelly
+Total active power sensor that measures only the Wall Connector. The default
+charging_idle_power_watts is 50 W and is constrained to 1–100 W. The legacy
+charging_current_entity option is retained for upgrade compatibility but is not
+used by the gate. Never publish or send this configuration or token.
 
 ## One-time upgrade and permissions
 
@@ -44,7 +47,7 @@ in chat. The app does not send configuration files or HA tokens to GitHub.
 ## Start safely
 
 1. Keep github_token, repository, branch=production and interval_seconds unchanged.
-2. Leave enable_deployment OFF initially. Open Web UI and confirm App 0.3.1.
+2. Leave enable_deployment OFF initially. Open Web UI and confirm App 0.3.2.
    The original sandbox installation/history stays in /data/sandbox.
 3. While logged into HA as your administrator, copy your Ingress user ID displayed
    at the bottom of this app. In the app Configuration set deployment_admin_user_id
@@ -88,20 +91,23 @@ is blocked rather than overwriting user changes. Ask for a migration/reconciliat
 
 ## Charging gate and overrides
 
-The gate uses local Wall Connector contactor and vehicle current, not cloud
-charging state or the connected flag. Connected but idle is allowed.
-Both readings must have a timezone-aware last_reported within 120 seconds.
-Contactor ON or current >0.1 A counts as charging. Unknown/unavailable/invalid/stale
-values, missing token or API/network failures block installation and restart.
+The gate uses the local Wall Connector contactor and dedicated Shelly total active
+power, not cloud charging state, connected state or the Wall Connector's phantom
+vehicle-current reading. Connected but idle is allowed. Both gate readings must
+have a timezone-aware last_reported within 120 seconds. Contactor ON or absolute
+power above charging_idle_power_watts counts as charging. The default 50 W limit
+is well below a 1 A charge and may never be configured above 100 W. Unknown,
+unavailable, invalid or stale values, missing token and API/network failures block
+installation and restart.
 
 Last reported freshness is not proof of sensor correctness. There is no atomic
 lock between reading charging status and changing files/restarting HA. The app
 does NOT stop the charger or hold its state. Avoid starting charging during an
 installation. Overrides cannot guarantee uninterrupted charging or protection.
 
-Install this update while charging arms an override for one install attempt of
+Force install despite charging arms an override for one install attempt of
 the exact commit, valid for ten minutes. Then click Install verified candidate.
-Rollback and Restart each have a SEPARATE one-time override: installation consent
+Rollback and Force restart each have a SEPARATE one-time override: installation consent
 must not silently authorize a later HA restart. Overrides live only in memory,
 expire, are consumed by an attempt, and never bypass file validation/ownership.
 Pause deployments clears an armed override. They do not disable load protection;

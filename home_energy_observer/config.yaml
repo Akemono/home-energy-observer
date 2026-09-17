@@ -1,5 +1,5 @@
 name: Home Energy Observer
-version: "0.3.1"
+version: "0.3.2"
 slug: home_energy_observer
 description: Git observer with opt-in integration deployment and recovery.
 arch:
@@ -28,6 +28,8 @@ options:
   deployment_admin_user_id: ""
   charging_contactor_entity: binary_sensor.evse_contactor_closed
   charging_current_entity: sensor.evse_vehicle_current
+  charging_power_entity: sensor.evse_total_active_power
+  charging_idle_power_watts: 50
 schema:
   repository: str
   branch: str
@@ -37,3 +39,5 @@ schema:
   deployment_admin_user_id: str
   charging_contactor_entity: str
   charging_current_entity: str
+  charging_power_entity: str
+  charging_idle_power_watts: int(1,100)

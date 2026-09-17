@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.2
+
+- Replace unreliable Wall Connector vehicle-current gating with dedicated EVSE total active power.
+- Treat a closed contactor or absolute power above the configurable idle limit as charging.
+- Keep the legacy current option for update compatibility, but do not use it for deployment decisions.
+- Clarify that one-time force install/restart controls bypass only the charging gate.
+
 ## 0.3.1
 
 - Publishable Home Assistant App Repository package.

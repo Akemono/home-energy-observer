@@ -14,10 +14,11 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, quote
 from urllib.request import Request, build_opener, HTTPRedirectHandler
-from deployment import Blocked, Installer, HomeAssistant, DEFAULT_CONTACTOR, DEFAULT_CURRENT
+from deployment import (Blocked, Installer, HomeAssistant, DEFAULT_CONTACTOR,
+                        DEFAULT_POWER, DEFAULT_IDLE_POWER_WATTS)
 
 MAX_BYTES = 1024 * 1024
-APP_VERSION = "0.3.1"
+APP_VERSION = "0.3.2"
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -339,7 +340,8 @@ def main():
         installer = Installer("/data/deployment", "/homeassistant",
                               HomeAssistant(os.environ.get("SUPERVISOR_TOKEN", ""),
                                             options.get("charging_contactor_entity", DEFAULT_CONTACTOR),
-                                            options.get("charging_current_entity", DEFAULT_CURRENT)),
+                                            options.get("charging_power_entity", DEFAULT_POWER),
+                                            options.get("charging_idle_power_watts", DEFAULT_IDLE_POWER_WATTS)),
                               enabled=bool(options.get("enable_deployment", False) and admin))
     except Exception:
         raise SystemExit("Deployment state invalid. Files preserved; repair stored state before restarting.")
