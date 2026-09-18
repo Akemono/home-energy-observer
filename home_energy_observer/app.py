@@ -18,7 +18,7 @@ from deployment import (Blocked, Installer, SuiteInstaller, MODULES, DEPLOY_ACTI
                         HomeAssistant, DEFAULT_CONTACTOR, DEFAULT_POWER, DEFAULT_IDLE_POWER_WATTS)
 
 MAX_BYTES = 1024 * 1024
-APP_VERSION = "0.4.0"
+APP_VERSION = "0.4.1"
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -214,7 +214,7 @@ class Observer:
         with self.operation:
             self._poll_installer(client, branch)
 
-    def action(self, name, expected_commit=""):
+    def action(self, name, expected_commit="", pending_commit=""):
         if name == "check":
             self.wakeup.set()
             return
@@ -224,7 +224,10 @@ class Observer:
                     if not self.installer:
                         raise ValueError("Deployment unavailable")
                     try:
-                        self.installer.action(name, expected_commit)
+                        if name.split("--", 1)[0] == "deploy-replace":
+                            self.installer.action(name, expected_commit, pending_commit)
+                        else:
+                            self.installer.action(name, expected_commit)
                         if name.split("--", 1)[0] == "deploy-resume":
                             self.wakeup.set()
                     except Exception as error:
@@ -291,7 +294,7 @@ def make_handler(observer, allowed_peer="172.30.32.2", deployment_admin=""):
                 return
             deploy_actions = ("/deploy-install", "/deploy-override", "/deploy-restart", "/restart-override",
                               "/deploy-confirm", "/deploy-rollback", "/rollback-override", "/deploy-recover",
-                              "/deploy-pause", "/deploy-resume")
+                              "/deploy-pause", "/deploy-resume", "/deploy-replace")
             deploy_actions += tuple("/" + action + "--" + domain
                                     for action in DEPLOY_ACTIONS for domain in MODULES)
             if self.path not in ("/check",) + deploy_actions:
@@ -313,7 +316,8 @@ def make_handler(observer, allowed_peer="172.30.32.2", deployment_admin=""):
             except (ValueError, OSError):
                 self.send_error(400)
                 return
-            observer.action(self.path[1:], fields.get("commit", [""])[0])
+            observer.action(self.path[1:], fields.get("commit", [""])[0],
+                            fields.get("pending_commit", [""])[0])
             self.send_response(303)
             # Relative redirect preserves the ingress session prefix.
             self.send_header("Location", "./")

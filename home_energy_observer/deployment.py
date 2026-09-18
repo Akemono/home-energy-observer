@@ -24,7 +24,7 @@ MODULES = {"home_energy_financial": CORE_FILES, "home_energy_planner": CORE_FILE
            "home_energy_power": CORE_FILES, DOMAIN: ALLOWED}
 DEPLOY_ACTIONS = ("deploy-install", "deploy-override", "deploy-restart", "restart-override",
                   "deploy-confirm", "deploy-rollback", "rollback-override", "deploy-recover",
-                  "deploy-pause", "deploy-resume")
+                  "deploy-pause", "deploy-resume", "deploy-replace")
 
 
 def payload_path(domain):
@@ -418,7 +418,7 @@ class Installer:
             return
         self.write(record)
 
-    def action(self, name, commit):
+    def action(self, name, commit, pending_commit=""):
         self.require_enabled()
         if name == "deploy-recover":
             self.recover()
@@ -434,6 +434,18 @@ class Installer:
         elif name in ("deploy-override", "restart-override", "rollback-override"):
             self.arm(commit, {"deploy-override": "install", "restart-override": "restart",
                               "rollback-override": "rollback"}[name])
+        elif name == "deploy-replace":
+            pending = self.state["pending"]
+            if self.state["journal"] or not pending or pending["commit"] != pending_commit:
+                raise Blocked("No matching pending installation; refresh")
+            if not self.candidate or self.candidate["commit"] != commit:
+                raise Blocked("Candidate changed; refresh")
+            validate(self.candidate, self.domain)
+            if pending["manifest"]["sha256"] == self.candidate["manifest"]["sha256"]:
+                raise Blocked("Candidate has the same files as the pending installation")
+            # Explicit repair only; never inherit an install/restart override.
+            self.grant = None
+            self.write(self.candidate)
         elif name == "deploy-install":
             if self.state["pending"]:
                 raise Blocked("Resolve pending deployment first")
@@ -475,9 +487,9 @@ class Installer:
 
     def render(self, csrf):
         esc = html.escape
-        def button(action, text, record=None):
+        def button(action, text, record=None, pending_commit=""):
             commit = record["commit"] if record else ""
-            return '<form method="post" action="' + action + '"><input type="hidden" name="csrf" value="' + csrf + '"><input type="hidden" name="commit" value="' + commit + '"><button>' + text + '</button></form>'
+            return '<form method="post" action="' + action + '"><input type="hidden" name="csrf" value="' + csrf + '"><input type="hidden" name="commit" value="' + commit + '"><input type="hidden" name="pending_commit" value="' + esc(pending_commit) + '"><button>' + text + '</button></form>'
         def label(record):
             return "None" if record is None else esc(record["manifest"]["version"] + " / " + record["commit"][:12])
         active, pending = self.state["active"], self.state["pending"]
@@ -486,6 +498,10 @@ class Installer:
             buttons += button("deploy-install", "Install verified candidate", self.candidate)
             buttons += button("deploy-override", "Force install despite charging — arm one-time override", self.candidate)
         if pending:
+            if (self.candidate and not self.state["journal"]
+                    and self.candidate["manifest"]["sha256"] != pending["manifest"]["sha256"]):
+                buttons += button("deploy-replace", "Replace unverified installation (requires idle)",
+                                  self.candidate, pending["commit"])
             buttons += button("deploy-restart", "Restart Home Assistant", pending)
             buttons += button("restart-override", "Force restart despite charging — arm one-time override", pending)
             buttons += button("deploy-confirm", "I verified the integration works — confirm installation", pending)
@@ -548,14 +564,17 @@ class SuiteInstaller:
                 module.status = (str(error) if isinstance(error, Blocked) else
                                  "Module unavailable or validation failed; existing installation preserved")
 
-    def action(self, name, commit):
+    def action(self, name, commit, pending_commit=""):
         action, separator, domain = name.partition("--")
         domain = domain if separator else DOMAIN
         if domain not in self.modules or action not in DEPLOY_ACTIONS:
             raise Blocked("Unknown module action")
         if action == "deploy-restart" and any(module.state["journal"] for module in self.modules.values()):
             raise Blocked("Recover all interrupted module installations before restarting HA")
-        self.modules[domain].action(action, commit)
+        if action == "deploy-replace":
+            self.modules[domain].action(action, commit, pending_commit)
+        else:
+            self.modules[domain].action(action, commit)
 
     def render(self, csrf):
         parts = ["<section><h2>Independent Home Energy integrations</h2><p>" + html.escape(self.status) + "</p></section>"]

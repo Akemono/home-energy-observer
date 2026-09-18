@@ -1,4 +1,4 @@
-# Home Energy Observer 0.4.0
+# Home Energy Observer 0.4.1
 
 Four fixed domains are supported: home_energy_financial, home_energy_planner,
 home_energy_power and home_energy_tesla. Each has its own installation panel,
@@ -201,3 +201,14 @@ References:
 - https://developers.home-assistant.io/docs/apps/configuration/
 - https://developers.home-assistant.io/docs/apps/communication/
 - https://developers.home-assistant.io/docs/api/rest/
+# Repairing an unverified installation (0.4.1)
+
+If a broken installation is still Pending verification, do not confirm it.
+Use Check now, then Replace unverified installation in the affected module.
+The button appears only for a candidate with different verified files.
+This explicit action requires idle charging status and cannot use a force override.
+It checks both displayed commits, preserves confirmed recovery history, and uses
+the normal durable deployment journal. Pending installations are never replaced
+automatically. After all intended repairs are pending, restart HA once, verify
+the integrations, and only then confirm them. Interrupted repairs use Recover
+interrupted deployment; never delete deployment state or staging files manually.

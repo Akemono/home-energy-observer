@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.1
+
+- Explicit replacement of an unverified installation by a verified candidate.
+- Bind repair to module, pending commit and candidate commit; require idle charging
+  state without override. Never automatically replace pending installations.
+- Reuse journal recovery and file checks, preserving confirmed history and requiring
+  restart plus human verification of the replacement.
+
 ## 0.4.0
 
 - Independent deployment panels for Financial, Planner, Power Manager and Tesla.
