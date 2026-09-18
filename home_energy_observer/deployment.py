@@ -18,6 +18,23 @@ MAX_SIZE = 1024 * 1024
 ALLOWED = frozenset(("__init__.py", "config_flow.py", "const.py", "engine.py",
                      "power.py", "sensor.py", "switch.py", "manifest.json",
                      "strings.json", "translations/en.json", "README.md"))
+CORE_FILES = frozenset(("__init__.py", "config_flow.py", "coordinator.py", "engine.py",
+                        "sensor.py", "manifest.json", "strings.json", "translations/en.json", "README.md"))
+MODULES = {"home_energy_financial": CORE_FILES, "home_energy_planner": CORE_FILES,
+           "home_energy_power": CORE_FILES, DOMAIN: ALLOWED}
+DEPLOY_ACTIONS = ("deploy-install", "deploy-override", "deploy-restart", "restart-override",
+                  "deploy-confirm", "deploy-rollback", "rollback-override", "deploy-recover",
+                  "deploy-pause", "deploy-resume")
+
+
+def payload_path(domain):
+    return "releases/tesla-shadow.json" if domain == DOMAIN else "releases/" + domain + ".json"
+
+
+def manifest_path(domain):
+    return "deployment.json" if domain == DOMAIN else "deployments/" + domain + ".json"
+
+
 DEFAULT_CONTACTOR = "binary_sensor.evse_contactor_closed"
 DEFAULT_POWER = "sensor.evse_total_active_power"
 DEFAULT_IDLE_POWER_WATTS = 50.0
@@ -27,14 +44,18 @@ class Blocked(ValueError):
     """Safe user-facing reason, never raw network errors."""
 
 
-def validate(record):
+def validate(record, expected_domain=None):
     if not isinstance(record, dict) or not re.fullmatch("[0-9a-f]{40}", str(record.get("commit", ""))):
         raise Blocked("Invalid deployment commit")
     manifest, payload = record["manifest"], record["payload"]
-    if (type(manifest.get("schema_version")) is not int or manifest["schema_version"] != 1
+    domain = manifest.get("domain")
+    schema = manifest.get("schema_version")
+    if (domain not in MODULES or (expected_domain is not None and domain != expected_domain)
+            or type(schema) is not int or schema not in (1, 2)
+            or (schema == 1 and domain != DOMAIN)
+            or (schema == 2 and manifest.get("min_observer_version") != "0.4.0")
             or manifest.get("kind") != "ha-integration"
-            or manifest.get("path") != "releases/tesla-shadow.json"
-            or manifest.get("domain") != DOMAIN):
+            or manifest.get("path") != payload_path(domain)):
         raise Blocked("Deployment manifest rejected")
     version = manifest.get("version", "")
     if not isinstance(version, str) or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
@@ -43,7 +64,7 @@ def validate(record):
     if len(data) > MAX_SIZE or hashlib.sha256(data).hexdigest() != manifest.get("sha256"):
         raise Blocked("Deployment checksum or size rejected")
     files = json.loads(payload)
-    if not isinstance(files, dict) or set(files) != ALLOWED:
+    if not isinstance(files, dict) or set(files) != MODULES[domain]:
         raise Blocked("Deployment file allowlist rejected")
     for name, content in files.items():
         if not isinstance(content, str) or "\x00" in content:
@@ -54,7 +75,7 @@ def validate(record):
         elif name.endswith(".json"):
             json.loads(content)
     integration = json.loads(files["manifest.json"])
-    if (integration.get("domain") != DOMAIN or integration.get("version") != version
+    if (integration.get("domain") != domain or integration.get("version") != version
             or integration.get("requirements") != [] or integration.get("config_flow") is not True):
         raise Blocked("Integration metadata rejected")
     return files
@@ -167,11 +188,14 @@ class HomeAssistant:
 
 
 class Installer:
-    def __init__(self, directory, config_root, ha, enabled=False):
+    def __init__(self, directory, config_root, ha, enabled=False, domain=DOMAIN):
+        if domain not in MODULES:
+            raise Blocked("Unsupported integration domain")
+        self.domain = domain
         self.root = Path(config_root)
         self.parent = self.root / "custom_components"
-        self.target = self.parent / DOMAIN
-        self.stage = self.parent / ("." + DOMAIN + ".stage")
+        self.target = self.parent / domain
+        self.stage = self.parent / ("." + domain + ".stage")
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
         self.path = self.directory / "deployment-state.json"
@@ -195,12 +219,12 @@ class Installer:
             raise Blocked("Invalid deployment state")
         for record in state["history"] + [state.get("active"), state.get("pending")]:
             if record is not None:
-                validate(record)
+                validate(record, self.domain)
         journal = state.get("journal")
         if journal:
-            validate(journal["new"])
+            validate(journal["new"], self.domain)
             if journal["old"] is not None:
-                validate(journal["old"])
+                validate(journal["old"], self.domain)
         if len(json.dumps(state, ensure_ascii=True).encode()) > MAX_SIZE * 12:
             raise Blocked("Deployment state exceeds storage limit")
 
@@ -227,7 +251,7 @@ class Installer:
             return not path.exists()
         if not path.is_dir():
             return False
-        expected = validate(record)
+        expected = validate(record, self.domain)
         found = {}
         for item in path.rglob("*"):
             if item.is_symlink():
@@ -241,7 +265,7 @@ class Installer:
                 raise Blocked("Non-regular file inside integration")
             if relative.startswith("__pycache__/") and item.suffix == ".pyc":
                 continue
-            if relative not in ALLOWED or item.stat().st_size > MAX_SIZE:
+            if relative not in MODULES[self.domain] or item.stat().st_size > MAX_SIZE:
                 return False
             content = item.read_bytes()
             if partial:
@@ -279,7 +303,7 @@ class Installer:
             raise Blocked("Candidate changed; refresh the page")
         if operation not in ("install", "restart", "rollback"):
             raise Blocked("Invalid override operation")
-        validate(record)
+        validate(record, self.domain)
         self.grant = (commit, operation, time.monotonic() + 600)
         self.status = "One-time " + operation + " override armed for this commit (10 minutes)"
 
@@ -289,7 +313,7 @@ class Installer:
 
     def write(self, record, rollback=False):
         self.require_enabled()
-        validate(record)
+        validate(record, self.domain)
         if self.state["journal"]:
             raise Blocked("Interrupted deployment; use Recover interrupted deployment")
         self.paths()
@@ -308,7 +332,7 @@ class Installer:
         self.save(journal={"old": old, "new": record, "rollback": rollback})
         try:
             self.stage.mkdir()
-            for name, content in validate(record).items():
+            for name, content in validate(record, self.domain).items():
                 path = self.stage / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 with path.open("x", encoding="utf-8", newline="") as stream:
@@ -368,11 +392,11 @@ class Installer:
         commit = client.get("/commits/" + branch)["sha"]
         if not isinstance(commit, str) or not re.fullmatch("[0-9a-f]{40}", commit):
             raise Blocked("Invalid Git commit")
-        manifest = json.loads(client.get("/contents/deployment.json?ref=" + commit, raw=True))
+        manifest = json.loads(client.get("/contents/" + manifest_path(self.domain) + "?ref=" + commit, raw=True))
         # Never use a remote-controlled path, even before validation.
-        payload = client.get("/contents/releases/tesla-shadow.json?ref=" + commit, raw=True).decode("utf-8")
+        payload = client.get("/contents/" + payload_path(self.domain) + "?ref=" + commit, raw=True).decode("utf-8")
         record = dict(commit=commit, manifest=manifest, payload=payload)
-        validate(record)
+        validate(record, self.domain)
         if self.grant and self.grant[1] == "install" and self.grant[0] != commit:
             self.grant = None
         self.candidate = record
@@ -485,4 +509,59 @@ class Installer:
                 '<br>Override: ' + grant + '<br>Charging gate last check: ' + esc(gate_detail) +
                 '</p><p>Overrides bypass only the charging gate, never validation. Restarting HA interrupts ALL automations, including load protection. Do not rely on HA protection during restart.</p><div class="actions">' +
                 (buttons if self.enabled else "Enable deployments in app Configuration to use these controls.") +
-                '</div><p>Only home_energy_tesla is managed. Existing YAML charging automations remain active. Confirmation is your manual acceptance, not an automatic health check.</p></section>')
+                '</div><p>Managed integration: ' + esc(self.domain) + '. Existing YAML charging automations remain active. Confirmation is your manual acceptance, not an automatic health check.</p></section>')
+
+
+class SuiteInstaller:
+    """Independent install/rollback transactions; no cross-directory atomic claim.
+
+    Keeps the historic Tesla state path. New domains each have separate journals,
+    overrides, three-version history and explicit acceptance. All poll one commit.
+    """
+    def __init__(self, directory, config_root, ha, enabled=False):
+        self.modules = {domain: Installer(directory if domain == DOMAIN else Path(directory) / domain,
+                       config_root, ha, enabled, domain) for domain in MODULES}
+        self.status = "Each integration installs independently. Install central modules before Tesla."
+
+    def poll(self, client, branch):
+        if not any(module.enabled for module in self.modules.values()):
+            return
+        for module in self.modules.values():
+            module.candidate = None
+        try:
+            commit = client.get("/commits/" + branch)
+        except Exception:
+            for module in self.modules.values():
+                module.grant = None
+            raise
+
+        class PinnedClient:
+            def get(self, path, **kwargs):
+                return commit if path.startswith("/commits/") else client.get(path, **kwargs)
+
+        for module in self.modules.values():
+            try:
+                module.poll(PinnedClient(), branch)
+            except Exception as error:
+                module.candidate = None
+                module.grant = None
+                module.status = (str(error) if isinstance(error, Blocked) else
+                                 "Module unavailable or validation failed; existing installation preserved")
+
+    def action(self, name, commit):
+        action, separator, domain = name.partition("--")
+        domain = domain if separator else DOMAIN
+        if domain not in self.modules or action not in DEPLOY_ACTIONS:
+            raise Blocked("Unknown module action")
+        if action == "deploy-restart" and any(module.state["journal"] for module in self.modules.values()):
+            raise Blocked("Recover all interrupted module installations before restarting HA")
+        self.modules[domain].action(action, commit)
+
+    def render(self, csrf):
+        parts = ["<section><h2>Independent Home Energy integrations</h2><p>" + html.escape(self.status) + "</p></section>"]
+        for domain, module in self.modules.items():
+            page = module.render(csrf)
+            for action in DEPLOY_ACTIONS:
+                page = page.replace('action="' + action + '"', 'action="' + action + '--' + domain + '"')
+            parts.append(page.replace("Integration deployment — experimental", html.escape(domain)))
+        return "".join(parts)

@@ -17,5 +17,9 @@ the app documentation. Home Assistant Supervisor manages future app updates.
 
 The app deliberately has no write access to `/addons`. It requests write access
 to the Home Assistant configuration directory only for its fixed managed
-integration folder, plus the Home Assistant Core API for charging-state checks
+integration folders, plus the Home Assistant Core API for charging-state checks
 and explicit restart requests.
+
+Observer 0.4.0 manages Financial, Planner, Power Manager and Tesla as independent
+integration deployments. Each has its own fixed allowlist, confirmation and
+rollback history. Existing Tesla deployments remain supported.

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0
+
+- Independent deployment panels for Financial, Planner, Power Manager and Tesla.
+- Fixed domain-specific allowlists and paths; separate journals, overrides and recovery.
+- Keep historic Tesla deployment state and schema-1 rollback; schema-2 releases
+  require 0.4.0 and are rejected by older installers.
+- Pin every module in a poll to one Git commit; no suite-wide atomic upgrade claim.
+- Block HA restart until all interrupted module transactions are recovered.
+- Preserve charging gate, admin/CSRF checks, no self-updating app and explicit acceptance.
+
 ## 0.3.6
 
 - Stop treating Home Assistant state timestamps as device heartbeats for push integrations.

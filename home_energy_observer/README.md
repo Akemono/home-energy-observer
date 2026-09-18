@@ -1,7 +1,10 @@
 # Home Energy Observer
 
 Home Assistant app for controlled, supervised deployment of a fixed
-Home Energy custom-integration bundle from a separate private Git repository.
+Home Energy custom integrations from a separate private Git repository.
+
+Version 0.4.0 manages Financial, Planner, Power Manager and Tesla independently,
+with separate installation, confirmation and recovery for each fixed domain.
 
 The app source is public so Home Assistant Supervisor can install and update it
 without granting the app write access to /addons. Runtime options, GitHub tokens,

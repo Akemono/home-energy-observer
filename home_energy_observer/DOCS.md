@@ -1,4 +1,10 @@
-# Home Energy Observer 0.3.6
+# Home Energy Observer 0.4.0
+
+Four fixed domains are supported: home_energy_financial, home_energy_planner,
+home_energy_power and home_energy_tesla. Each has its own installation panel,
+allowlist, state, three-version recovery history and acceptance. See the private
+project's ARCHITECTURE.md for the integration migration. No private inputs are
+needed in this generic Observer source.
 
 ## Recommended installation from the app repository
 
@@ -46,7 +52,7 @@ in chat. The app does not send configuration files or HA tokens to GitHub.
 ## Start safely
 
 1. Keep github_token, repository, branch=production and interval_seconds unchanged.
-2. Leave enable_deployment OFF initially. Open Web UI and confirm App 0.3.6.
+2. Leave enable_deployment OFF initially. Open Web UI and confirm App 0.4.0.
    Legacy sandbox state, if present, remains inert in /data/sandbox and is not displayed or polled.
 3. While logged into HA as your administrator, copy your Ingress user ID displayed
    at the bottom of this app. In the app Configuration set deployment_admin_user_id
@@ -66,6 +72,13 @@ deployment actions are denied; do not weaken the check.
 
 ## First managed integration installation
 
+For the modular migration, install Financial, Planner, Power Manager, then Tesla
+using their separate panels before the explicit HA restart. Add the three central
+integrations in Devices & services; keep an existing Tesla entry. Verify and confirm
+each module separately. These are independent transactions, not a suite-wide atomic
+exchange. Recover every interrupted module before requesting a restart. Never force
+through unexpected/mismatched files. Existing Tesla schema-1 deployments still work.
+
 After a candidate has been published on production:
 1. Make sure the car is not charging. Check now, then Install verified candidate.
 2. Expect Pending verification, NOT Confirmed. This means files are on disk only.
@@ -73,7 +86,8 @@ After a candidate has been published on production:
    Restart interrupts ALL HA automations, including software load protection.
    A timeout can mean the restart happened; check HA before trying again.
 4. For the FIRST installation only, open Settings > Devices & services >
-   Add Integration > Home Energy Tesla Shadow. Later file updates reuse that entry.
+   Add Integration for the installed modules. Later file updates reuse those entries.
+   Configure Financial, Planner and Power Manager before Tesla Shadow.
 5. Verify Tesla shadow decision and Tesla automatic control appear and that the
    switch is OFF after restart. This switch controls only the shadow adviser:
    it does NOT disable the existing YAML automations and is NOT the emergency
@@ -85,7 +99,7 @@ After a candidate has been published on production:
    This initial release is supervised deployment, not unattended activation.
 
 Do not manually copy integration files alongside this installer. If an unmanaged
-home_energy_tesla folder already exists, or managed files were edited, installation
+managed integration folder already exists, or managed files were edited, installation
 is blocked rather than overwriting user changes. Ask for a migration/reconciliation.
 
 ## Charging gate and overrides
@@ -123,7 +137,9 @@ electrical limits; this prototype is not a safety device.
 ## Recovery
 
 Three previously CONFIRMED integration versions are stored with full file contents
-in /data/deployment/deployment-state.json. Pending/failed candidates do not occupy
+in /data/deployment/deployment-state.json for Tesla, and
+/data/deployment/<domain>/deployment-state.json for each central integration.
+Pending/failed candidates do not occupy
 a successful-version slot. This is separate from the original JSON sandbox history.
 
 Restore previous integration files restores the last confirmed version when a
@@ -134,7 +150,7 @@ if first-install removal/recovery is needed. Files cannot roll back the effects
 that arbitrary Python already had on HA or external devices.
 
 Updates stage only the fixed allowlisted files in
-/homeassistant/custom_components/.home_energy_tesla.stage. Existing folders are
+/homeassistant/custom_components/.<domain>.stage for the selected fixed domain. Existing folders are
 swapped using Linux renameat2(RENAME_EXCHANGE); no unsafe two-rename fallback.
 First installation uses a single directory rename. A persistent journal tracks
 the intended old/new snapshots. After interruption, automatic deployment stops.
@@ -146,7 +162,7 @@ files block cleanup. Do not delete the journal to bypass a problem. If recovery
 reports unexpected content, preserve the app data and restore your HA backup.
 Removing old staging copies does not remove the retained recovery snapshots.
 
-Only the home_energy_tesla folder and its fixed staging sibling are managed.
+Only the four listed domain folders and their fixed staging siblings are managed.
 configuration.yaml, automations.yaml, scripts.yaml, helpers, secrets and other
 integrations are not modified by the installer. Path checks are not protection
 against another privileged process racing to change those paths.
@@ -158,6 +174,13 @@ an exact filename allowlist, Python compilation without execution and JSON
 metadata. It is NOT a Home Assistant runtime/import check, code-security audit,
 electrical-safety proof or automatic activation/health verification.
 
+Schema 2 requires this 0.4.0 installer and is rejected by older apps. Schema 1
+remains accepted for historical Tesla recovery only. Do not downgrade the app to
+0.3.x once schema-2 records exist: keep 0.4.0 to roll back individual integrations.
+No request can supply an arbitrary domain, manifest path, payload path or filename.
+One poll pins every module to the same commit. Overrides are bound to domain,
+commit, operation and one use. A restart is blocked while ANY module has a journal.
+
 Local tests run on Windows with a test double for the Linux directory exchange.
 There is no local Docker/HA Core test environment. Native Linux filesystem
 exchange, HA Ingress identity, API restart and first integration setup still need
@@ -168,7 +191,8 @@ hardware/storage or filesystem failure recoverable.
 
 The app code is updated manually/rebuilt separately; never loaded from a payload.
 tools/build_deployment.py prints an apply_patch patch for deterministic
-deployment.json and releases/tesla-shadow.json. Apply that patch, then run
+deployment.json, deployments/<domain>.json and the four fixed release bundles.
+Apply that patch (or use --write for deterministic generated files), then run
 python tools/build_deployment.py --check and python -m unittest discover -s tests -v.
 Publish the tested commit to production only when the user is ready.
 The existing release.json/probe.json dry-run path remains backward compatible.

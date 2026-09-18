@@ -14,11 +14,11 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, quote
 from urllib.request import Request, build_opener, HTTPRedirectHandler
-from deployment import (Blocked, Installer, HomeAssistant, DEFAULT_CONTACTOR,
-                        DEFAULT_POWER, DEFAULT_IDLE_POWER_WATTS)
+from deployment import (Blocked, Installer, SuiteInstaller, MODULES, DEPLOY_ACTIONS,
+                        HomeAssistant, DEFAULT_CONTACTOR, DEFAULT_POWER, DEFAULT_IDLE_POWER_WATTS)
 
 MAX_BYTES = 1024 * 1024
-APP_VERSION = "0.3.6"
+APP_VERSION = "0.4.0"
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -225,7 +225,7 @@ class Observer:
                         raise ValueError("Deployment unavailable")
                     try:
                         self.installer.action(name, expected_commit)
-                        if name == "deploy-resume":
+                        if name.split("--", 1)[0] == "deploy-resume":
                             self.wakeup.set()
                     except Exception as error:
                         self.installer.status = str(error) if isinstance(error, Blocked) else "Deployment action failed or restart response uncertain. Inspect HA and recovery status."
@@ -292,6 +292,8 @@ def make_handler(observer, allowed_peer="172.30.32.2", deployment_admin=""):
             deploy_actions = ("/deploy-install", "/deploy-override", "/deploy-restart", "/restart-override",
                               "/deploy-confirm", "/deploy-rollback", "/rollback-override", "/deploy-recover",
                               "/deploy-pause", "/deploy-resume")
+            deploy_actions += tuple("/" + action + "--" + domain
+                                    for action in DEPLOY_ACTIONS for domain in MODULES)
             if self.path not in ("/check",) + deploy_actions:
                 self.send_error(404)
                 return
@@ -331,7 +333,7 @@ def main():
     if admin and not re.fullmatch("[0-9a-f]{32}", admin):
         raise SystemExit("deployment_admin_user_id must be the 32-character HA administrator user ID")
     try:
-        installer = Installer("/data/deployment", "/homeassistant",
+        installer = SuiteInstaller("/data/deployment", "/homeassistant",
                               HomeAssistant(os.environ.get("SUPERVISOR_TOKEN", ""),
                                             options.get("charging_contactor_entity", DEFAULT_CONTACTOR),
                                             options.get("charging_power_entity", DEFAULT_POWER),
