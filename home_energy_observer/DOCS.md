@@ -1,4 +1,10 @@
-# Home Energy Observer 0.4.1
+# Home Energy Observer 0.6.0
+
+Schema 3 Tesla payloads require Observer 0.6.0 and allow the additional fixed
+live.py module. Upgrade this app before installing such a candidate. Older
+schema 1/2 payloads and rollback history retain their original file allowlists.
+Installation does not activate optional live control; integration acceptance
+and any live trial are separate user actions. No automatic Home Assistant restart.
 
 Four fixed domains are supported: home_energy_financial, home_energy_planner,
 home_energy_power and home_energy_tesla. Each has its own installation panel,

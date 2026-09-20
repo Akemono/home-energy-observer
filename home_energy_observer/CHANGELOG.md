@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0
+
+- Support schema 3 for the Tesla adapter's fixed live.py module, with minimum
+  Observer version validation. No arbitrary additional module paths.
+- Preserve schema 1/2 file allowlists and historical recovery compatibility.
+- No automatic live activation, charging commands or Home Assistant restart.
+
 ## 0.5.1
 
 - Add explicit "Install dashboard while charging (once)" for the verified candidate.

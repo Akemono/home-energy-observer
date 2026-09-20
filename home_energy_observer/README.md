@@ -3,8 +3,11 @@
 Home Assistant app for controlled, supervised deployment of a fixed
 Home Energy custom integrations from a separate private Git repository.
 
-Version 0.5.1 manages Financial, Planner, Power Manager and Tesla independently,
+Version 0.6.0 manages Financial, Planner, Power Manager and Tesla independently,
 with separate installation, confirmation and recovery for each fixed domain.
+Schema 3 adds a fixed live.py allowlist entry for the Tesla adapter, requiring
+Observer 0.6.0. Existing schema 1/2 releases and recovery history remain supported.
+Installing integration files never activates their optional live trial.
 It adds an independent initially-paused static dashboard updater with a stable
 local loader URL, automatic file verification, idle-only installation and rollback.
 No repeated manual upload or resource-version edit after one-time setup. Dashboard
