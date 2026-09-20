@@ -22,6 +22,8 @@ CORE_FILES = frozenset(("__init__.py", "config_flow.py", "coordinator.py", "engi
                         "sensor.py", "manifest.json", "strings.json", "translations/en.json", "README.md"))
 MODULES = {"home_energy_financial": CORE_FILES, "home_energy_planner": CORE_FILES,
            "home_energy_power": CORE_FILES, DOMAIN: ALLOWED}
+DASHBOARD = "home_energy_dashboard"
+MANAGED_MODULES = (*MODULES, DASHBOARD)
 DEPLOY_ACTIONS = ("deploy-install", "deploy-override", "deploy-restart", "restart-override",
                   "deploy-confirm", "deploy-rollback", "rollback-override", "deploy-recover",
                   "deploy-pause", "deploy-resume", "deploy-replace")
@@ -49,6 +51,11 @@ def validate(record, expected_domain=None):
         raise Blocked("Invalid deployment commit")
     manifest, payload = record["manifest"], record["payload"]
     domain = manifest.get("domain")
+    if domain == DASHBOARD:
+        from dashboard_deployment import validate_dashboard
+        if expected_domain not in (None, DASHBOARD):
+            raise Blocked("Deployment domain mismatch")
+        return validate_dashboard(record)
     schema = manifest.get("schema_version")
     if (domain not in MODULES or (expected_domain is not None and domain != expected_domain)
             or type(schema) is not int or schema not in (1, 2)
@@ -189,7 +196,7 @@ class HomeAssistant:
 
 class Installer:
     def __init__(self, directory, config_root, ha, enabled=False, domain=DOMAIN):
-        if domain not in MODULES:
+        if domain not in MANAGED_MODULES:
             raise Blocked("Unsupported integration domain")
         self.domain = domain
         self.root = Path(config_root)
@@ -265,7 +272,7 @@ class Installer:
                 raise Blocked("Non-regular file inside integration")
             if relative.startswith("__pycache__/") and item.suffix == ".pyc":
                 continue
-            if relative not in MODULES[self.domain] or item.stat().st_size > MAX_SIZE:
+            if relative not in expected or item.stat().st_size > MAX_SIZE:
                 return False
             content = item.read_bytes()
             if partial:
@@ -341,7 +348,8 @@ class Installer:
                     os.fsync(stream.fileno())
             if not self.matches(self.stage, record):
                 raise Blocked("Staged verification failed")
-            sync_directory(self.stage / "translations")
+            if (self.stage / "translations").exists():
+                sync_directory(self.stage / "translations")
             sync_directory(self.stage)
             # Recheck immediately before the directory exchange, not at download time.
             self.safety(record, "rollback" if rollback else "install")
@@ -537,6 +545,8 @@ class SuiteInstaller:
     def __init__(self, directory, config_root, ha, enabled=False):
         self.modules = {domain: Installer(directory if domain == DOMAIN else Path(directory) / domain,
                        config_root, ha, enabled, domain) for domain in MODULES}
+        from dashboard_deployment import DashboardInstaller
+        self.modules[DASHBOARD] = DashboardInstaller(Path(directory) / DASHBOARD, config_root, ha, enabled)
         self.status = "Each integration installs independently. Install central modules before Tesla."
 
     def poll(self, client, branch):

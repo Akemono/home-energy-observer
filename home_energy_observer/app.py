@@ -14,11 +14,11 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, quote
 from urllib.request import Request, build_opener, HTTPRedirectHandler
-from deployment import (Blocked, Installer, SuiteInstaller, MODULES, DEPLOY_ACTIONS,
+from deployment import (Blocked, Installer, SuiteInstaller, MANAGED_MODULES as MODULES, DEPLOY_ACTIONS,
                         HomeAssistant, DEFAULT_CONTACTOR, DEFAULT_POWER, DEFAULT_IDLE_POWER_WATTS)
 
 MAX_BYTES = 1024 * 1024
-APP_VERSION = "0.4.1"
+APP_VERSION = "0.5.0"
 
 
 class NoRedirect(HTTPRedirectHandler):

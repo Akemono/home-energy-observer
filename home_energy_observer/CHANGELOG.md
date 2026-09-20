@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.0
+
+- Independent dashboard updater in www/home-energy-managed; no changes to manual
+  uploads, Lovelace resource storage or dashboard YAML.
+- Fixed loader resource reads a fresh local version manifest on each full page load
+  and imports a content-addressed card. No repeated uploads or resource URL changes.
+- Dashboard updates default paused; Resume enables automatic installs while idle.
+  Atomic directory exchange, checksums, fixed allowlist, modified-file refusal,
+  journal recovery and three previous versions. Rollback pauses updates.
+- File verification is not frontend health acceptance. No HA restart or manual
+  integration-style confirmation for dashboard files; integrations keep all gates.
+
 ## 0.4.1
 
 - Explicit replacement of an unverified installation by a verified candidate.

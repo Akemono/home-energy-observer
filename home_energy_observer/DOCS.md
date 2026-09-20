@@ -212,3 +212,40 @@ the normal durable deployment journal. Pending installations are never replaced
 automatically. After all intended repairs are pending, restart HA once, verify
 the integrations, and only then confirm them. Interrupted repairs use Recover
 interrupted deployment; never delete deployment state or staging files manually.
+# Dashboard updates (Observer 0.5.0)
+
+Update the Observer app once through Home Assistant. Existing integrations and
+their confirmation/restart workflow are unchanged. There is a separate **Dashboard
+updates** panel, initially paused, using the same configured release branch and
+administrator/CSRF protection.
+
+1. Choose **Check now**, then **Resume dashboard updates** in that panel. Installation
+   waits for confirmed idle charging; unknown/charging never bypasses this gate.
+2. Wait for **Installed files** to show a dashboard version.
+3. In HA **Settings > Dashboards > Resources**, replace the old dashboard resource
+   (do not add a second copy) with `/local/home-energy-managed/loader.js`, type
+   **JavaScript module**. Keep the existing dashboard YAML and refresh the page.
+
+After this one-time setup, published dashboard bundles are installed automatically
+while updates remain enabled. A normal full browser-page refresh loads the new
+content-addressed version. Merely changing HA tabs is not a full reload. Open
+sessions are not forcibly reloaded and active controls are not hot-swapped.
+
+No dashboard files or tokens are downloaded directly from GitHub by the browser.
+Observer uses its existing repository credentials; the browser only loads local
+static files. As with any HA www content, those code files are publicly readable;
+never include secrets in release JavaScript. Repository code is trusted, not sandboxed.
+
+The only managed static directory is `/homeassistant/www/home-energy-managed`.
+Existing `/www/community/home-energy` uploads and `.storage` remain untouched.
+Unexpected/modified files block updates, rather than being adopted or overwritten.
+**Restore previous dashboard and pause updates** restores a verified prior bundle;
+refresh the browser afterwards. Three prior versions are kept. No app-triggered HA
+restart or charging override is provided for dashboard updates. **Recover interrupted
+dashboard update** preserves a provable previous/new transaction; ambiguous files
+remain untouched. After interrupted recovery updates are paused until resumed.
+
+"Installed" refers to verified files on disk, not tested UI health. Check the dashboard
+after a release and use rollback if needed. There is no automatic JavaScript health
+judgment or rollback based on browser errors. Never downgrade Observer below 0.5.0
+while expecting dashboard updates to be managed.

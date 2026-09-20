@@ -12,8 +12,8 @@ configuration:
     name: Check interval
     description: Seconds between Git checks (60–3600).
   enable_deployment:
-    name: Enable integration deployment
-    description: Allow this app to manage its fixed Home Assistant integration folder.
+    name: Enable managed deployments
+    description: Allow fixed integration folders and the separate www/home-energy-managed dashboard folder. Each module starts paused.
   deployment_admin_user_id:
     name: Deployment administrator user ID
     description: Exact 32-character Home Assistant user ID allowed to use deployment controls.
