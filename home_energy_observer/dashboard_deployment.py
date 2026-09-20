@@ -90,8 +90,19 @@ class DashboardInstaller(Installer):
         super().poll(client, branch)
 
     def action(self, name, commit, pending_commit=""):
+        if name == "deploy-override":
+            self.require_enabled()
+            if self.state["pending"] or self.state["journal"]:
+                raise Blocked("Resolve pending or interrupted dashboard installation first")
+            # One explicit, commit-bound install. Never leave a grant for background polling.
+            try:
+                self.arm(commit, "install")
+                super().action("deploy-install", commit)
+            finally:
+                self.grant = None
+            return
         if name not in {"deploy-pause", "deploy-resume", "deploy-install", "deploy-rollback", "deploy-recover"}:
-            raise Blocked("Dashboard has no HA restart, charging override or manual health-confirm action")
+            raise Blocked("Dashboard has no HA restart, rollback override or manual health-confirm action")
         super().action(name, commit, pending_commit)
 
     def render(self, csrf):
@@ -105,6 +116,8 @@ class DashboardInstaller(Installer):
         controls = button("deploy-pause", "Pause dashboard updates") + button("deploy-resume", "Resume dashboard updates")
         if self.candidate and not self.state["pending"]:
             controls += button("deploy-install", "Install dashboard now (requires idle)", self.candidate)
+            if not self.state["journal"]:
+                controls += button("deploy-override", "Install dashboard while charging (once)", self.candidate)
         if active and self.state["history"]:
             controls += button("deploy-rollback", "Restore previous dashboard and pause updates", active)
         if self.state["journal"]:
@@ -116,6 +129,8 @@ class DashboardInstaller(Installer):
                 + '/3</p><p>Stable resource: <code>/local/home-energy-managed/loader.js</code> (JavaScript module). '
                 'Replace the old resource once; do not add both. Refresh the browser page after an update. '
                 'No HA restart, resource URL edits or uploads for later releases. Dashboard YAML is untouched. '
-                'Updates wait until charging is confirmed idle. Installed means verified files, not tested UI health.</p>'
+                'Automatic updates wait until charging is confirmed idle. The explicit one-time install bypasses only '
+                'the charging/unknown-state gate for this candidate, never file validation. No HA restart or charging command. '
+                'Installed means verified files, not tested UI health.</p>'
                 '<div class="actions">' + (controls if self.enabled else "Enable deployments in app Configuration first.")
                 + '</div></section>')

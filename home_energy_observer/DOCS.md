@@ -214,6 +214,12 @@ the integrations, and only then confirm them. Interrupted repairs use Recover
 interrupted deployment; never delete deployment state or staging files manually.
 # Dashboard updates (Observer 0.5.0)
 
+Observer 0.5.1 additionally offers **Install dashboard while charging (once)**.
+This explicitly installs the displayed verified candidate immediately, even when
+charging is active or unknown. The commit-bound permission is cleared after the
+attempt, including errors. It never disables automatic charging gates or integrity
+checks, and never restarts HA or sends a charging command. Rollback still requires idle.
+
 Update the Observer app once through Home Assistant. Existing integrations and
 their confirmation/restart workflow are unchanged. There is a separate **Dashboard
 updates** panel, initially paused, using the same configured release branch and
@@ -241,7 +247,8 @@ Existing `/www/community/home-energy` uploads and `.storage` remain untouched.
 Unexpected/modified files block updates, rather than being adopted or overwritten.
 **Restore previous dashboard and pause updates** restores a verified prior bundle;
 refresh the browser afterwards. Three prior versions are kept. No app-triggered HA
-restart or charging override is provided for dashboard updates. **Recover interrupted
+restart is provided for dashboard updates. The optional one-time install override
+is available from 0.5.1. **Recover interrupted
 dashboard update** preserves a provable previous/new transaction; ambiguous files
 remain untouched. After interrupted recovery updates are paused until resumed.
 

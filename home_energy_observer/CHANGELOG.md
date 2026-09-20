@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.1
+
+- Add explicit "Install dashboard while charging (once)" for the verified candidate.
+- Reuse the commit-bound install grant, execute immediately and always clear it,
+  including failures. Only the charging/unknown gate is bypassed; validation,
+  modified-file refusal, atomic installation and recovery remain unchanged.
+- No HA restart, charging commands, automatic gate relaxation or integration changes.
+
 ## 0.5.0
 
 - Independent dashboard updater in www/home-energy-managed; no changes to manual

@@ -21,11 +21,13 @@ integration folders and the fixed www/home-energy-managed dashboard directory,
 plus the Home Assistant Core API for charging-state checks
 and explicit restart requests.
 
-Observer 0.5.0 manages Financial, Planner, Power Manager and Tesla as independent
+Observer 0.5.1 manages Financial, Planner, Power Manager and Tesla as independent
 integration deployments. Each has its own fixed allowlist, confirmation and
 rollback history. Existing Tesla deployments remain supported.
 
 An independent, opt-in dashboard updater uses a stable local loader resource.
 After one-time setup, releases install automatically while charging is idle.
+An explicit one-time dashboard install can bypass the charging gate for the
+selected candidate; integrity checks and integration deployment gates remain intact.
 Refresh the browser page to use an update; dashboard YAML and manually uploaded
 files are not rewritten. Rollback restores previous verified files and pauses updates.
