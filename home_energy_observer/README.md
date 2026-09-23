@@ -3,6 +3,10 @@
 Home Assistant app for controlled, supervised deployment of a fixed
 Home Energy custom integrations from a separate private Git repository.
 
+Version 0.6.1 presents the five managed parts in a compact release overview, with
+the existing module actions available under expandable details. It keeps the
+installation, restart, confirmation and recovery workflow explicit.
+
 Version 0.6.0 manages Financial, Planner, Power Manager and Tesla independently,
 with separate installation, confirmation and recovery for each fixed domain.
 Schema 3 adds a fixed live.py allowlist entry for the Tesla adapter, requiring

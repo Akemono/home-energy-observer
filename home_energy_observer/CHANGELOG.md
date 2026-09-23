@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.1
+
+- Redesign the app page as a compact release overview with module status and a
+  guided primary action. Keep all existing verified deployment and recovery
+  controls in expandable per-module details.
+- Show only changed payload digests as new candidates in the overview.
+
 ## 0.6.0
 
 - Support schema 3 for the Tesla adapter's fixed live.py module, with minimum

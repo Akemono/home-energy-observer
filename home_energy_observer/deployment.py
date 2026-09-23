@@ -590,10 +590,200 @@ class SuiteInstaller:
             self.modules[domain].action(action, commit)
 
     def render(self, csrf):
-        parts = ["<section><h2>Independent Home Energy integrations</h2><p>" + html.escape(self.status) + "</p></section>"]
+        esc = html.escape
+        names = {
+            "home_energy_financial": "Financial",
+            "home_energy_planner": "Planner",
+            "home_energy_power": "Power Manager",
+            DOMAIN: "Tesla",
+            DASHBOARD: "Dashboard",
+        }
+
+        def is_new_candidate(module):
+            candidate = module.candidate
+            if not candidate:
+                return False
+            for record in (module.state["active"], module.state["pending"]):
+                if record and record["manifest"].get("sha256") == candidate["manifest"].get("sha256"):
+                    return False
+            return True
+
+        # The first unresolved release operation is shown as the page's primary
+        # action. The detailed module forms below remain the source of truth for
+        # every other operation and keep their commit/CSRF checks intact.
+        selected = None
+        selected_action = ""
+        for domain, module in self.modules.items():
+            if module.enabled and module.state["journal"]:
+                selected, selected_action = (domain, module), "deploy-recover"
+                break
+        for domain, module in self.modules.items():
+            if selected is None and module.enabled and module.state["pending"] and domain != DASHBOARD:
+                selected, selected_action = (domain, module), "deploy-restart"
+                break
+        if selected is None and not any(m.state["journal"] for m in self.modules.values()):
+            for domain, module in self.modules.items():
+                if (module.enabled and not module.state["paused"] and is_new_candidate(module)
+                        and not module.state["pending"]):
+                    selected, selected_action = (domain, module), "deploy-install"
+                    break
+
+        def action_form(domain, module, action, text):
+            record = (module.state["pending"] if action == "deploy-restart" else
+                      module.candidate if action == "deploy-install" else None)
+            commit = record["commit"] if record else ""
+            pending_commit = module.state["pending"]["commit"] if action == "deploy-replace" and module.state["pending"] else ""
+            return ('<form method="post" action="' + action + '--' + domain + '">'
+                    '<input type="hidden" name="csrf" value="' + esc(csrf) + '">'
+                    '<input type="hidden" name="commit" value="' + esc(commit) + '">'
+                    '<input type="hidden" name="pending_commit" value="' + esc(pending_commit) + '">'
+                    '<button class="primary-action">' + text + ' <span aria-hidden="true">→</span></button></form>')
+
+        if selected:
+            domain, module = selected
+            record = module.state["pending"] if selected_action == "deploy-restart" else module.candidate
+            version = record["manifest"]["version"] if record else ""
+            if selected_action == "deploy-recover":
+                headline = "Een onderbroken installatie vraagt om herstel"
+                description = "Herstel de bestanden van " + names.get(domain, domain) + " voordat je verdergaat."
+                button_text = "Herstel installatie"
+                stage = "Herstel nodig"
+            elif selected_action == "deploy-restart":
+                headline = names.get(domain, domain) + " wacht op een Home Assistant-herstart"
+                description = "Versie " + version + " is geïnstalleerd en wacht op controle. Herstart daarna Home Assistant en controleer de werking."
+                button_text = "Herstart Home Assistant"
+                stage = "Herstart nodig"
+            elif domain == DASHBOARD:
+                headline = "Dashboardupdate beschikbaar"
+                description = "Versie " + version + " is gecontroleerd. Na installatie vernieuw je het Home Assistant-dashboard in je browser."
+                button_text = "Installeer dashboardbestanden"
+                stage = "Installatie beschikbaar"
+            else:
+                headline = "Nieuwe versie beschikbaar voor " + names.get(domain, domain)
+                description = "Versie " + version + " is gecontroleerd en klaar voor installatie."
+                button_text = "Installeer gecontroleerde versie"
+                stage = "Installatie beschikbaar"
+            primary = action_form(domain, module, selected_action, button_text)
+            alert_class = "observer-alert"
+        else:
+            blocked_candidate = next(((domain, module) for domain, module in self.modules.items()
+                                      if is_new_candidate(module)), None)
+            blocked_pending = next(((domain, module) for domain, module in self.modules.items()
+                                    if module.state["pending"] and not module.enabled), None)
+            blocked_recovery = next(((domain, module) for domain, module in self.modules.items()
+                                     if module.state["journal"] and not module.enabled), None)
+            if blocked_recovery:
+                headline = "Herstel nodig voor " + names.get(blocked_recovery[0], blocked_recovery[0])
+                description = "Deployments staan uit. Schakel ze in bij app Configuration om de onderbroken installatie te herstellen."
+                stage = "Herstel geblokkeerd"
+                alert_class = "observer-alert"
+            elif blocked_pending:
+                headline = "Een installatie wacht op een Home Assistant-herstart"
+                description = "Deployments staan uit. Schakel ze in bij app Configuration om de actie voor " + names.get(blocked_pending[0], blocked_pending[0]) + " uit te voeren."
+                stage = "Deployment uitgeschakeld"
+                alert_class = "observer-alert"
+            elif blocked_candidate and not blocked_candidate[1].enabled:
+                headline = "Er is een kandidaat, maar deployments staan uit"
+                description = "Schakel deployments voor " + names.get(blocked_candidate[0], blocked_candidate[0]) + " in bij app Configuration."
+                stage = "Deployment uitgeschakeld"
+                alert_class = "observer-alert"
+            elif blocked_candidate and blocked_candidate[1].state["paused"]:
+                headline = "Nieuwe versie beschikbaar voor " + names.get(blocked_candidate[0], blocked_candidate[0])
+                description = "Automatische deployments staan gepauzeerd. Hervat deployments bij de geavanceerde acties om verder te gaan."
+                stage = "Deployments gepauzeerd"
+                alert_class = "observer-alert"
+            else:
+                headline = "Geen openstaande releaseactie"
+                description = "Er is geen nieuwe kandidaat beschikbaar. Gebruik Controleer nu om releases opnieuw op te halen."
+                stage = "Geen openstaande actie"
+                alert_class = "observer-alert observer-alert-clear"
+            primary = ""
+
+        confirmation_count = sum(bool(m.state["pending"]) for domain, m in self.modules.items() if domain != DASHBOARD)
+        candidate_count = sum(is_new_candidate(m) for m in self.modules.values())
+        normal_pending = any(m.state["pending"] for domain, m in self.modules.items() if domain != DASHBOARD)
+        normal_candidate = any(is_new_candidate(m) for domain, m in self.modules.items() if domain != DASHBOARD)
+        dashboard_module = self.modules[DASHBOARD]
+        dashboard_release = bool(dashboard_module.state["pending"] or is_new_candidate(dashboard_module))
+        if normal_pending:
+            current_step = 3
+        elif candidate_count or dashboard_module.state["pending"] or any(m.state["journal"] for m in self.modules.values()):
+            current_step = 2
+        else:
+            current_step = 0
+        step_three = "HA herstarten" if normal_pending or normal_candidate else ("Dashboard verversen in browser" if dashboard_release else "HA herstarten")
+        flow_steps = ("Kandidaat gecontroleerd", "Bestanden geïnstalleerd", step_three, "Integraties handmatig bevestigen")
+        flow = []
+        for index, title in enumerate(flow_steps, 1):
+            css = " neutral" if current_step == 0 else (" done" if index < current_step else (" current" if index == current_step else ""))
+            marker = "–" if current_step == 0 else ("✓" if index < current_step else str(index))
+            flow.append('<div class="observer-step' + css + '"><span>' + marker + '</span>' + title + '</div>')
+
+        charging = getattr(self.modules[DOMAIN].ha, "last_charging_check", "Niet gecontroleerd")
+        if not isinstance(charging, str):
+            charging = "Niet beschikbaar"
+        automatic_count = sum(m.enabled and not m.state["paused"] for m in self.modules.values())
+        if automatic_count == len(self.modules):
+            updates = "Automatische deployments actief (5/5)"
+        elif automatic_count:
+            updates = "Automatische deployments gemengd (" + str(automatic_count) + "/5 actief)"
+        else:
+            updates = "Automatische deployments gepauzeerd of uitgeschakeld (0/5)"
+        rows = []
+        for domain, module in self.modules.items():
+            active = module.state["active"]
+            pending = module.state["pending"]
+            candidate = module.candidate if is_new_candidate(module) else None
+            installed_version = active["manifest"]["version"] if active else "—"
+            pending_version = pending["manifest"]["version"] if pending else "—"
+            candidate_version = candidate["manifest"]["version"] if candidate else "—"
+            if module.state["journal"]:
+                status, status_class = "Herstel nodig", "warn"
+            elif pending:
+                status, status_class = ("Bestanden controleren", "blue") if domain == DASHBOARD else ("Herstart nodig", "warn")
+            elif candidate:
+                status, status_class = "Nieuwe versie", "blue"
+            elif domain == DASHBOARD and active:
+                status, status_class = "Bestanden geplaatst", "blue"
+            elif active:
+                status, status_class = "Actueel", "ok"
+            else:
+                status, status_class = "Nog niet geïnstalleerd", "neutral"
+            rows.append('<div class="observer-row"><div class="observer-module"><span class="observer-icon">'
+                        + esc(names.get(domain, domain)[:1]) + '</span><strong>' + esc(names.get(domain, domain))
+                        + '</strong></div><div data-label="Bevestigd">' + esc(installed_version)
+                        + '</div><div data-label="Pending">' + esc(pending_version)
+                        + '</div><div data-label="Kandidaat">' + esc(candidate_version)
+                        + '</div><div data-label="Status"><span class="observer-status ' + status_class + '">'
+                        + esc(status) + '</span></div></div>')
+
+        parts = ['<section class="observer-overview">',
+                 '<div class="observer-heading"><div><div class="observer-eyebrow">Home Energy Observer</div>'
+                 '<h2>Releasebeheer</h2><p>Installaties, herstarts en herstelversies op één plek.</p></div>'
+                 '<form method="post" action="check"><input type="hidden" name="csrf" value="' + esc(csrf)
+                 + '"><button class="observer-check">↻ &nbsp; Controleer nu</button></form></div>',
+                 '<div class="observer-hero"><section class="' + alert_class + '"><div class="observer-eyebrow">'
+                 + esc(stage) + '</div><h3>' + esc(headline) + '</h3><p>' + esc(description)
+                 + '</p>' + primary + '</section><section class="observer-safety"><div class="observer-eyebrow">'
+                 + 'Status en veiligheid</div><h3>' + esc(updates) + '</h3><p><strong>Laadcontrole laatst:</strong> '
+                 + esc(charging) + '</p><p class="observer-note">Een herstart onderbreekt tijdelijk alle Home Assistant-automatiseringen, ook laadbeveiliging.</p></section></div>',
+                 '<section class="observer-flow"><div class="observer-section-head"><h3>Releasepad</h3><span>'
+                 + str(confirmation_count) + ' openstaande bevestiging(en) · ' + str(candidate_count) + ' kandidaat(en)</span></div><div class="observer-steps">'
+                 + ''.join(flow) + '</div></section>',
+                 '<section class="observer-modules"><div class="observer-section-head"><h3>Onderdelen</h3><span>Vijf integraties</span></div>'
+                 '<div class="observer-table-head"><div>Onderdeel</div><div>Bevestigd</div><div>Pending</div><div>Kandidaat</div><div>Status</div></div>'
+                 + ''.join(rows) + '</section>',
+                 '<details class="observer-advanced"><summary>Geavanceerde acties, details en herstelversies</summary>'
+                 '<p class="observer-note">Alle installatie-, pauzeer-, hervat-, bevestig-, rollback- en herstelacties staan per onderdeel hieronder.</p>']
         for domain, module in self.modules.items():
             page = module.render(csrf)
             for action in DEPLOY_ACTIONS:
                 page = page.replace('action="' + action + '"', 'action="' + action + '--' + domain + '"')
-            parts.append(page.replace("Integration deployment — experimental", html.escape(domain)))
-        return "".join(parts)
+            # The outer wrapper provides a compact summary; preserve the full
+            # trusted module renderer inside so no existing action is lost.
+            content = page.removeprefix("<section>").removesuffix("</section>")
+            content = content.replace("Integration deployment — experimental", esc(names.get(domain, domain)))
+            content = content.replace("<h2>", '<h3 class="observer-detail-title">', 1).replace("</h2>", "</h3>", 1)
+            parts.append('<details class="observer-detail"><summary>' + esc(names.get(domain, domain)) + '</summary><section>' + content + '</section></details>')
+        parts.append('</details>')
+        return ''.join(parts)
