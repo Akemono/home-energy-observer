@@ -1,4 +1,4 @@
-# Home Energy Observer 0.6.1
+# Home Energy Observer 0.6.2
 
 Schema 3 Tesla payloads require Observer 0.6.0 and allow the additional fixed
 live.py module. Upgrade this app before installing such a candidate. Older
@@ -100,6 +100,11 @@ After a candidate has been published on production:
    manual-charging override yet. No charging commands are added.
 6. Return to the app and click I verified the integration works — confirm installation.
    This is your explicit acceptance, not an automatic health check.
+   A pending integration remains pending until this confirmation, even after an HA
+   restart. Observer cannot infer from its stored deployment state whether an
+   externally requested restart happened or whether the integration works.
+   When a newer candidate is available, you can explicitly replace the pending
+   files while charging is confirmed idle; restart HA again before confirming it.
 7. Resume deployments is optional. Future candidates can install automatically
    when idle, but every installation pauses again for explicit restart/acceptance.
    This initial release is supervised deployment, not unattended activation.

@@ -3,6 +3,10 @@
 Home Assistant app for controlled, supervised deployment of a fixed
 Home Energy custom integrations from a separate private Git repository.
 
+Version 0.6.2 labels pending installations as awaiting manual verification and
+shows a newer verified candidate alongside the pending version. A temporary
+missing Ingress user ID is called out where the deployment actions are shown.
+
 Version 0.6.1 presents the five managed parts in a compact release overview, with
 the existing module actions available under expandable details. It keeps the
 installation, restart, confirmation and recovery workflow explicit.

@@ -415,7 +415,7 @@ class Installer:
         # This is read-only and lets Check now explain a fail-closed gate.
         charging = self.ha.charging()
         if self.state["pending"]:
-            self.status = "Awaiting restart and confirmation of installed files"
+            self.status = "Pending verification; restart HA if needed, verify the integration, then confirm manually"
             return
         if self.state["paused"]:
             self.status = "Deployment candidate verified; automatic deployments paused"
@@ -619,7 +619,10 @@ class SuiteInstaller:
                 break
         for domain, module in self.modules.items():
             if selected is None and module.enabled and module.state["pending"] and domain != DASHBOARD:
-                selected, selected_action = (domain, module), "deploy-restart"
+                # Pending integrations always need an explicit human health check.
+                # HA exposes no dependable persisted boot marker here, so do not
+                # keep telling the user to restart after a reboot they performed.
+                selected, selected_action = (domain, module), "deploy-confirm"
                 break
         if selected is None and not any(m.state["journal"] for m in self.modules.values()):
             for domain, module in self.modules.items():
@@ -629,8 +632,8 @@ class SuiteInstaller:
                     break
 
         def action_form(domain, module, action, text):
-            record = (module.state["pending"] if action == "deploy-restart" else
-                      module.candidate if action == "deploy-install" else None)
+            record = (module.state["pending"] if action in ("deploy-restart", "deploy-confirm") else
+                      module.candidate if action in ("deploy-install", "deploy-replace") else None)
             commit = record["commit"] if record else ""
             pending_commit = module.state["pending"]["commit"] if action == "deploy-replace" and module.state["pending"] else ""
             return ('<form method="post" action="' + action + '--' + domain + '">'
@@ -641,7 +644,7 @@ class SuiteInstaller:
 
         if selected:
             domain, module = selected
-            record = module.state["pending"] if selected_action == "deploy-restart" else module.candidate
+            record = module.state["pending"] if selected_action in ("deploy-restart", "deploy-confirm") else module.candidate
             version = record["manifest"]["version"] if record else ""
             if selected_action == "deploy-recover":
                 headline = "Een onderbroken installatie vraagt om herstel"
@@ -653,6 +656,11 @@ class SuiteInstaller:
                 description = "Versie " + version + " is geïnstalleerd en wacht op controle. Herstart daarna Home Assistant en controleer de werking."
                 button_text = "Herstart Home Assistant"
                 stage = "Herstart nodig"
+            elif selected_action == "deploy-confirm":
+                headline = names.get(domain, domain) + " wacht op controle en bevestiging"
+                description = "Herstart eerst Home Assistant als dat na installatie nog niet is gebeurd. Controleer daarna of Home Assistant en versie " + version + " van de integratie goed werken en bevestig de installatie handmatig."
+                button_text = "Ik heb herstart en de integratie gecontroleerd — bevestig"
+                stage = "Controle nodig"
             elif domain == DASHBOARD:
                 headline = "Dashboardupdate beschikbaar"
                 description = "Versie " + version + " is gecontroleerd. Na installatie vernieuw je het Home Assistant-dashboard in je browser."
@@ -664,6 +672,11 @@ class SuiteInstaller:
                 button_text = "Installeer gecontroleerde versie"
                 stage = "Installatie beschikbaar"
             primary = action_form(domain, module, selected_action, button_text)
+            pending = module.state["pending"]
+            if (pending and module.candidate and
+                    module.candidate["manifest"]["sha256"] != pending["manifest"]["sha256"]):
+                primary += action_form(domain, module, "deploy-replace",
+                    "Vervang door kandidaat " + module.candidate["manifest"]["version"] + " (vereist inactief laden)")
             alert_class = "observer-alert"
         else:
             blocked_candidate = next(((domain, module) for domain, module in self.modules.items()
@@ -678,8 +691,8 @@ class SuiteInstaller:
                 stage = "Herstel geblokkeerd"
                 alert_class = "observer-alert"
             elif blocked_pending:
-                headline = "Een installatie wacht op een Home Assistant-herstart"
-                description = "Deployments staan uit. Schakel ze in bij app Configuration om de actie voor " + names.get(blocked_pending[0], blocked_pending[0]) + " uit te voeren."
+                headline = "Een installatie wacht op controle en bevestiging"
+                description = "Deployments staan uit. Schakel ze in bij app Configuration om verder te gaan met " + names.get(blocked_pending[0], blocked_pending[0]) + ". Herstart Home Assistant als dat na installatie nog niet is gebeurd."
                 stage = "Deployment uitgeschakeld"
                 alert_class = "observer-alert"
             elif blocked_candidate and not blocked_candidate[1].enabled:
@@ -711,7 +724,7 @@ class SuiteInstaller:
             current_step = 2
         else:
             current_step = 0
-        step_three = "HA herstarten" if normal_pending or normal_candidate else ("Dashboard verversen in browser" if dashboard_release else "HA herstarten")
+        step_three = "Herstart en controle" if normal_pending else ("HA herstarten" if normal_candidate else ("Dashboard verversen in browser" if dashboard_release else "HA herstarten"))
         flow_steps = ("Kandidaat gecontroleerd", "Bestanden geïnstalleerd", step_three, "Integraties handmatig bevestigen")
         flow = []
         for index, title in enumerate(flow_steps, 1):
@@ -740,7 +753,10 @@ class SuiteInstaller:
             if module.state["journal"]:
                 status, status_class = "Herstel nodig", "warn"
             elif pending:
-                status, status_class = ("Bestanden controleren", "blue") if domain == DASHBOARD else ("Herstart nodig", "warn")
+                if domain == DASHBOARD:
+                    status, status_class = "Bestanden controleren", "blue"
+                else:
+                    status, status_class = "Controle nodig", "warn"
             elif candidate:
                 status, status_class = "Nieuwe versie", "blue"
             elif domain == DASHBOARD and active:

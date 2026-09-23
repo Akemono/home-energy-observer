@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.2
+
+- Show pending integrations as needing manual verification after a possible HA
+  restart, rather than repeatedly claiming that another restart is required.
+- Offer the existing commit-bound replacement action in the overview when a newer
+  verified candidate is available alongside pending files.
+- Warn prominently when the ingress user identity is unavailable or does not
+  authorize deployment actions; keep server-side authorization unchanged.
+
 ## 0.6.1
 
 - Redesign the app page as a compact release overview with module status and a
