@@ -1,4 +1,4 @@
-# Home Energy Observer 0.6.2
+# Home Energy Observer 0.6.3
 
 Schema 3 Tesla payloads require Observer 0.6.0 and allow the additional fixed
 live.py module. Upgrade this app before installing such a candidate. Older

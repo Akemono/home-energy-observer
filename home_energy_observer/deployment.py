@@ -642,6 +642,36 @@ class SuiteInstaller:
                     '<input type="hidden" name="pending_commit" value="' + esc(pending_commit) + '">'
                     '<button class="primary-action">' + text + ' <span aria-hidden="true">→</span></button></form>')
 
+        def candidate_cell(domain, module, candidate):
+            version = esc(candidate["manifest"]["version"])
+            pending = module.state["pending"]
+            can_install = module.enabled and not module.state["journal"]
+            if not can_install:
+                reason = ("Herstel eerst de onderbroken installatie" if module.state["journal"] else
+                          "Schakel deployments in bij app Configuration")
+                return '<span title="' + esc(reason) + '">' + version + '</span>'
+            if pending:
+                # Dashboard files are finalized during polling and its installer
+                # intentionally has no replacement action. Integrations can
+                # explicitly replace an unverified pending deployment.
+                if (domain == DASHBOARD or
+                        candidate["manifest"]["sha256"] == pending["manifest"]["sha256"]):
+                    return '<span title="Een installatie wacht eerst op afronding">' + version + '</span>'
+                action = "deploy-replace"
+                pending_commit = pending["commit"]
+                label = "Vervang pending installatie door kandidaat " + candidate["manifest"]["version"]
+            else:
+                action = "deploy-install"
+                pending_commit = ""
+                label = "Installeer kandidaat " + candidate["manifest"]["version"] + " direct"
+            commit = esc(candidate["commit"])
+            return ('<form class="observer-candidate-form" method="post" action="' + action + '--' + domain + '">'
+                    '<input type="hidden" name="csrf" value="' + esc(csrf) + '">'
+                    '<input type="hidden" name="commit" value="' + commit + '">'
+                    '<input type="hidden" name="pending_commit" value="' + esc(pending_commit) + '">'
+                    '<button class="observer-candidate-button" type="submit" aria-label="' + esc(label)
+                    + '" title="' + esc(label) + '">' + version + '</button></form>')
+
         if selected:
             domain, module = selected
             record = module.state["pending"] if selected_action in ("deploy-restart", "deploy-confirm") else module.candidate
@@ -769,7 +799,8 @@ class SuiteInstaller:
                         + esc(names.get(domain, domain)[:1]) + '</span><strong>' + esc(names.get(domain, domain))
                         + '</strong></div><div data-label="Bevestigd">' + esc(installed_version)
                         + '</div><div data-label="Pending">' + esc(pending_version)
-                        + '</div><div data-label="Kandidaat">' + esc(candidate_version)
+                        + '</div><div data-label="Kandidaat">'
+                        + (candidate_cell(domain, module, candidate) if candidate else esc(candidate_version))
                         + '</div><div data-label="Status"><span class="observer-status ' + status_class + '">'
                         + esc(status) + '</span></div></div>')
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.3
+
+- Make candidate versions in the module overview clickable for manual install or
+  replacement of a different pending integration version, using the existing commit-bound
+  actions and charging safety gate.
+
 ## 0.6.2
 
 - Show pending integrations as needing manual verification after a possible HA
