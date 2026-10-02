@@ -28,6 +28,7 @@ MANAGED_MODULES = (*MODULES, DASHBOARD)
 DEPLOY_ACTIONS = ("deploy-install", "deploy-override", "deploy-restart", "restart-override",
                   "deploy-confirm", "deploy-rollback", "rollback-override", "deploy-recover",
                   "deploy-pause", "deploy-resume", "deploy-replace")
+SUITE_ACTIONS = ("deploy-install-all", "deploy-restart-all")
 
 
 def payload_path(domain):
@@ -214,18 +215,20 @@ class Installer:
         self.candidate = None
         self.status = "Deployments disabled in Configuration"
         self.state = {"schema": 1, "active": None, "history": [], "pending": None,
-                      "paused": True, "journal": None, "rollback": False}
+                      "paused": True, "journal": None, "rollback": False, "restart_required": False}
         if self.path.exists():
             if self.path.stat().st_size > MAX_SIZE * 12:
                 raise Blocked("Deployment state too large")
             self.state = json.loads(self.path.read_text())
             self._validate_state(self.state)
+            self.state.setdefault("restart_required", bool(self.state["pending"]) and self.domain != DASHBOARD)
 
     def _validate_state(self, state):
         if (not isinstance(state, dict) or type(state.get("schema")) is not int
                 or state["schema"] != 1 or type(state.get("paused")) is not bool
                 or type(state.get("rollback")) is not bool
-                or not isinstance(state.get("history"), list) or len(state["history"]) > 3):
+                or not isinstance(state.get("history"), list) or len(state["history"]) > 3
+                or ("restart_required" in state and type(state["restart_required"]) is not bool)):
             raise Blocked("Invalid deployment state")
         for record in state["history"] + [state.get("active"), state.get("pending")]:
             if record is not None:
@@ -363,7 +366,7 @@ class Installer:
             else:
                 os.rename(self.stage, self.target)
             sync_directory(self.parent)
-            self.save(pending=record, rollback=rollback, paused=True)
+            self.save(pending=record, rollback=rollback, paused=True, restart_required=self.domain != DASHBOARD)
             self.cleanup_stage(old)
             self.save(journal=None)
             self.status = "Files installed; restart HA, then confirm the integration works"
@@ -380,7 +383,7 @@ class Installer:
         old, new = journal["old"], journal["new"]
         # Recovery never replaces/removes the live target, hence needs no charging override.
         if self.matches(self.target, new):
-            self.save(pending=new, paused=True, rollback=journal["rollback"])
+            self.save(pending=new, paused=True, rollback=journal["rollback"], restart_required=self.domain != DASHBOARD)
             self.cleanup_stage(old)
             self.save(journal=None)
             self.status = "Installed files recovered; restart HA and confirm"
@@ -472,6 +475,7 @@ class Installer:
             self.safety(pending, "restart")
             self.status = "HA restart requested; verify the integration afterwards"
             self.ha.restart()
+            self.save(restart_required=False)
         elif name == "deploy-confirm":
             pending = self.state["pending"]
             if self.state["journal"] or not pending or pending["commit"] != commit:
@@ -577,7 +581,62 @@ class SuiteInstaller:
                 module.status = (str(error) if isinstance(error, Blocked) else
                                  "Module unavailable or validation failed; existing installation preserved")
 
+    def install_candidates(self):
+        return [(domain, module, module.candidate) for domain, module in self.modules.items()
+                if module.enabled and module.candidate
+                and module.candidate["manifest"]["sha256"] !=
+                (module.state["pending"] or module.state["active"] or {"manifest": {"sha256": None}})["manifest"]["sha256"]]
+
+    def restart_modules(self):
+        return [(domain, module, module.state["pending"] or module.state["active"])
+                for domain, module in self.modules.items()
+                if domain != DASHBOARD and module.state.get("restart_required")]
+
+    @staticmethod
+    def batch_token(items):
+        data = [(domain, record["commit"], record["manifest"]["sha256"],
+                 (module.state["pending"] or {}).get("commit")) for domain, module, record in items]
+        return hashlib.sha256(json.dumps(data, separators=(",", ":")).encode()).hexdigest()
+
     def action(self, name, commit, pending_commit=""):
+        if name in SUITE_ACTIONS:
+            if any(module.state["journal"] for module in self.modules.values()):
+                raise Blocked("Recover all interrupted installations first")
+            items = self.install_candidates() if name == "deploy-install-all" else self.restart_modules()
+            if not items or self.batch_token(items) != commit:
+                raise Blocked("Release selection changed; refresh before continuing")
+            # Validate the entire reviewed batch before touching any files.
+            for domain, module, record in items:
+                module.require_enabled()
+                validate(record, domain)
+                module.grant = None  # Batch operations never inherit charging overrides.
+                old = module.state["pending"] or module.state["active"]
+                if not module.matches(module.target, old):
+                    raise Blocked("Installed files changed for " + domain)
+                if name == "deploy-install-all" and module.stage.exists():
+                    raise Blocked("Staging directory exists for " + domain)
+                module.safety(record, "install" if name == "deploy-install-all" else "restart", consume=False)
+            if name == "deploy-restart-all":
+                items[0][1].ha.restart()
+                # An accepted request is not a claim that HA rebooted or is healthy.
+                for _, module, _ in items:
+                    module.save(restart_required=False)
+                    module.status = "HA restart requested; verify the integration afterwards"
+                self.status = "HA restart requested; verify and confirm the installed integrations"
+                return
+            installed = []
+            for domain, module, record in items:
+                try:
+                    if module.state["pending"]:
+                        module.action("deploy-replace", record["commit"], module.state["pending"]["commit"])
+                    else:
+                        module.action("deploy-install", record["commit"])
+                    installed.append(domain)
+                except Exception:
+                    self.status = "Install all stopped at " + domain + "; completed: " + (", ".join(installed) or "none")
+                    raise
+            self.status = "Installed: " + ", ".join(installed) + ". Restart HA separately and verify the integrations."
+            return
         action, separator, domain = name.partition("--")
         domain = domain if separator else DOMAIN
         if domain not in self.modules or action not in DEPLOY_ACTIONS:
@@ -598,6 +657,16 @@ class SuiteInstaller:
             DOMAIN: "Tesla",
             DASHBOARD: "Dashboard",
         }
+        interrupted = any(m.state["journal"] for m in self.modules.values())
+        def suite_button(action, label, items):
+            enabled = bool(items) and not interrupted and all(m.enabled for _, m, _ in items)
+            return ('<form method="post" action="' + action + '"><input type="hidden" name="csrf" value="'
+                    + esc(csrf) + '"><input type="hidden" name="commit" value="'
+                    + (self.batch_token(items) if items else '') + '"><button class="observer-suite-action" '
+                    + ('' if enabled else 'disabled aria-disabled="true" ') + '>' + label + '</button></form>')
+        header_actions = ('<div class="observer-header-actions">'
+                          + suite_button("deploy-install-all", "Installeer alles", self.install_candidates())
+                          + suite_button("deploy-restart-all", "Herstart Home Assistant", self.restart_modules()))
 
         def is_new_candidate(module):
             candidate = module.candidate
@@ -807,8 +876,8 @@ class SuiteInstaller:
         parts = ['<section class="observer-overview">',
                  '<div class="observer-heading"><div><div class="observer-eyebrow">Home Energy Observer</div>'
                  '<h2>Releasebeheer</h2><p>Installaties, herstarts en herstelversies op één plek.</p></div>'
-                 '<form method="post" action="check"><input type="hidden" name="csrf" value="' + esc(csrf)
-                 + '"><button class="observer-check">↻ &nbsp; Controleer nu</button></form></div>',
+                 + header_actions + '<form method="post" action="check"><input type="hidden" name="csrf" value="' + esc(csrf)
+                 + '"><button class="observer-check">↻ &nbsp; Controleer nu</button></form></div></div>',
                  '<div class="observer-hero"><section class="' + alert_class + '"><div class="observer-eyebrow">'
                  + esc(stage) + '</div><h3>' + esc(headline) + '</h3><p>' + esc(description)
                  + '</p>' + primary + '</section><section class="observer-safety"><div class="observer-eyebrow">'

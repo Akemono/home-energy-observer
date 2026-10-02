@@ -3,6 +3,13 @@
 Home Assistant app for controlled, supervised deployment of a fixed
 Home Energy custom integrations from a separate private Git repository.
 
+Version 0.7.0 adds **Installeer alles** and **Herstart Home Assistant** at the
+top of the overview. Install all installs available enabled candidates in
+dependency order, preserving the individual journals and charging checks.
+The restart button becomes available after installed integration updates and
+returns to disabled after an accepted explicit restart request. Dashboard-only
+updates do not enable it. Verify and confirm integrations manually afterwards.
+
 Version 0.6.3 lets you click a candidate version in the module overview to
 install it directly, or replace a different pending integration version. The existing
 commit checks and charging gate still apply.

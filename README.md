@@ -6,6 +6,11 @@ No Home Assistant configuration, credentials, private deployment payloads or
 Tesla data are stored here. The app reads releases from a separately configured
 private GitHub repository using a repository-scoped Contents: read-only token.
 
+Observer **0.7.0** adds a header **Installeer alles** action and an explicit
+HA restart button, enabled only after installed integration updates. Existing
+validation, administrator authorization and charging checks remain in place.
+Dashboard-only updates do not require an HA restart.
+
 ## Install
 
 In Home Assistant open **Settings > Apps > App store > Repositories** and add:

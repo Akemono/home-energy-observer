@@ -1,4 +1,22 @@
-# Home Energy Observer 0.6.3
+# Home Energy Observer 0.7.0
+
+## Install all and restart
+
+The overview header offers **Installeer alles** for available verified candidates
+whose deployments are enabled. It installs Financial, Planner, Power Manager,
+Tesla and Dashboard in order, skipping unchanged files. A newer candidate can
+replace a pending integration through the same validated replacement workflow.
+The entire selection is bound to the submitted form; refresh if it changes.
+Charging must be idle for every operation. If a step fails, earlier installations
+remain pending and the interrupted module retains its recovery journal.
+
+**Herstart Home Assistant** starts disabled. Installing integration files makes
+it available, including after Observer itself restarts. Dashboard updates alone
+do not need it. Clicking it validates installed files and the charging state,
+then sends one HA restart request. Acceptance disables the button and is not
+proof that HA rebooted or is healthy. A failed/uncertain request remains available;
+check HA before retrying. Afterwards verify and confirm each integration manually.
+No restart is sent by Install all or automatic installation.
 
 Schema 3 Tesla payloads require Observer 0.6.0 and allow the additional fixed
 live.py module. Upgrade this app before installing such a candidate. Older

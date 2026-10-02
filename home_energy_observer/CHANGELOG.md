@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.0
+
+- Add header Install all for verified, enabled candidates in dependency order.
+  Bind the full selection, prevalidate every module, recheck idle before each
+  write and stop on failure with independent recovery journals.
+- Add a header HA restart button, disabled until installed integration updates.
+  Persist the requirement across Observer restarts and manual confirmation.
+  An accepted explicit request clears it; a failed request keeps it available.
+  Dashboard updates alone never require an HA restart.
+- Preserve administrator/CSRF authorization, integrity checks, charging gates
+  and manual verification. Install all never restarts HA automatically.
+
 ## 0.6.3
 
 - Make candidate versions in the module overview clickable for manual install or
