@@ -3,6 +3,12 @@
 Home Assistant app for controlled, supervised deployment of a fixed
 Home Energy custom integrations from a separate private Git repository.
 
+Version 0.7.1 adds Tesla deployment schema 4 for the selector, date/time,
+controls and live adapter files. Upgrade Observer to 0.7.1 before installing
+the expanded Tesla release. Existing schema 1/2/3 releases and recovery history
+remain supported. The Tesla payload retains its `releases/tesla-shadow.json`
+location and `home_energy_tesla` domain.
+
 Version 0.7.0 adds **Installeer alles** and **Herstart Home Assistant** at the
 top of the overview. Install all installs available enabled candidates in
 dependency order, preserving the individual journals and charging checks.

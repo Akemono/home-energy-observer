@@ -1,4 +1,17 @@
-# Home Energy Observer 0.7.0
+# Home Energy Observer 0.7.1
+
+## Tesla integration migration
+
+Upgrade Home Energy Observer to 0.7.1 before installing a Tesla schema 4
+release. Schema 4 adds the fixed `select.py`, `datetime.py` and `controls.py`
+files to the Tesla allowlist. Schema 1/2/3 releases and their recovery records
+remain accepted with their original exact file lists. The release stays under
+the `home_energy_tesla` domain and `releases/tesla-shadow.json` path.
+
+After the Observer upgrade, install the Tesla integration files and then
+restart Home Assistant once. Verify the Tesla integration and confirm its
+deployment in Observer. Do not install the Tesla release before Observer 0.7.1:
+older Observer versions reject schema 4.
 
 ## Install all and restart
 

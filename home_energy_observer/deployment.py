@@ -15,14 +15,15 @@ from urllib.request import Request, build_opener, HTTPRedirectHandler
 
 DOMAIN = "home_energy_tesla"
 MAX_SIZE = 1024 * 1024
-ALLOWED = frozenset(("__init__.py", "config_flow.py", "const.py", "engine.py",
+LEGACY_ALLOWED = frozenset(("__init__.py", "config_flow.py", "const.py", "engine.py",
                      "power.py", "sensor.py", "switch.py", "manifest.json",
                      "strings.json", "translations/en.json", "README.md"))
+LIVE_ALLOWED = LEGACY_ALLOWED | {"live.py"}
+ALLOWED = LIVE_ALLOWED | {"select.py", "datetime.py", "controls.py"}
 CORE_FILES = frozenset(("__init__.py", "config_flow.py", "coordinator.py", "engine.py",
                         "sensor.py", "manifest.json", "strings.json", "translations/en.json", "README.md"))
-LIVE_ALLOWED = ALLOWED | {"live.py"}
 MODULES = {"home_energy_financial": CORE_FILES, "home_energy_planner": CORE_FILES,
-           "home_energy_power": CORE_FILES, DOMAIN: LIVE_ALLOWED}
+           "home_energy_power": CORE_FILES, DOMAIN: ALLOWED}
 DASHBOARD = "home_energy_dashboard"
 MANAGED_MODULES = (*MODULES, DASHBOARD)
 DEPLOY_ACTIONS = ("deploy-install", "deploy-override", "deploy-restart", "restart-override",
@@ -60,10 +61,11 @@ def validate(record, expected_domain=None):
         return validate_dashboard(record)
     schema = manifest.get("schema_version")
     if (domain not in MODULES or (expected_domain is not None and domain != expected_domain)
-            or type(schema) is not int or schema not in (1, 2, 3)
+            or type(schema) is not int or schema not in (1, 2, 3, 4)
             or (schema == 1 and domain != DOMAIN)
             or (schema == 2 and manifest.get("min_observer_version") != "0.4.0")
             or (schema == 3 and (domain != DOMAIN or manifest.get("min_observer_version") != "0.6.0"))
+            or (schema == 4 and (domain != DOMAIN or manifest.get("min_observer_version") != "0.7.1"))
             or manifest.get("kind") != "ha-integration"
             or manifest.get("path") != payload_path(domain)):
         raise Blocked("Deployment manifest rejected")
@@ -74,7 +76,8 @@ def validate(record, expected_domain=None):
     if len(data) > MAX_SIZE or hashlib.sha256(data).hexdigest() != manifest.get("sha256"):
         raise Blocked("Deployment checksum or size rejected")
     files = json.loads(payload)
-    expected_files = (LIVE_ALLOWED if schema == 3 else ALLOWED) if domain == DOMAIN else MODULES[domain]
+    expected_files = ({1: LEGACY_ALLOWED, 2: LEGACY_ALLOWED, 3: LIVE_ALLOWED, 4: ALLOWED}[schema]
+                      if domain == DOMAIN else MODULES[domain])
     if not isinstance(files, dict) or set(files) != expected_files:
         raise Blocked("Deployment file allowlist rejected")
     for name, content in files.items():

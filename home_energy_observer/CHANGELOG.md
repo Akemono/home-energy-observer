@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.1
+
+- Accept Tesla schema 4 with the fixed select.py, datetime.py and controls.py
+  additions alongside the existing live.py allowlist.
+- Preserve exact schema 1/2/3 Tesla file allowlists for installed and rollback
+  records. Require Observer 0.7.1 for schema 4.
+- Build Tesla releases as schema 4 without changing the Tesla domain or payload path.
+
 ## 0.7.0
 
 - Add header Install all for verified, enabled candidates in dependency order.

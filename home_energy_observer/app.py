@@ -18,7 +18,7 @@ from deployment import (Blocked, Installer, SuiteInstaller, MANAGED_MODULES as M
                         HomeAssistant, DEFAULT_CONTACTOR, DEFAULT_POWER, DEFAULT_IDLE_POWER_WATTS)
 
 MAX_BYTES = 1024 * 1024
-APP_VERSION = "0.7.0"
+APP_VERSION = "0.7.1"
 
 
 class NoRedirect(HTTPRedirectHandler):
